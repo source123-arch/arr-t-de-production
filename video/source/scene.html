@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<style>
+  html,body{margin:0;width:1280px;height:720px;overflow:hidden;background:#000;font-family:"DejaVu Sans",sans-serif}
+  canvas{position:absolute;left:0;top:0}
+  .ov{position:absolute;inset:0;pointer-events:none}
+  #fade{background:#000;opacity:0}
+  #title{background:linear-gradient(90deg,rgba(0,0,0,.75),rgba(0,0,0,.35) 55%,rgba(0,0,0,0) 80%);display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding-left:110px;color:#fff;opacity:0}
+  #title .k{font-size:18px;letter-spacing:6px;color:#f5b400;font-weight:bold}
+  #title h1{font-size:64px;margin:14px 0 8px;font-weight:bold;letter-spacing:1px;text-shadow:0 2px 20px rgba(0,0,0,.8)}
+  #title .s{font-size:24px;color:#ddd}
+  #title .bar{width:120px;height:5px;background:#f5b400;margin-top:26px}
+  #cap{position:absolute;left:60px;bottom:58px;max-width:760px;opacity:0;color:#fff}
+  #cap .step{display:inline-block;background:#f5b400;color:#111;font-weight:bold;font-size:16px;padding:6px 12px;letter-spacing:2px}
+  #cap .txt{background:rgba(10,12,14,.78);padding:12px 16px;font-size:24px;line-height:1.35;border-left:5px solid #f5b400}
+  #cap .sub{font-size:17px;color:#cfcfcf;margin-top:4px}
+  #rec{position:absolute;left:28px;top:24px;color:#fff;font-family:"DejaVu Sans Mono",monospace;font-size:16px;opacity:0;text-shadow:0 0 4px #000}
+  #rec b{color:#ff3b30}
+  #det{position:absolute;right:40px;top:36px;width:250px;opacity:0;transform-origin:top right}
+  #det .body{background:linear-gradient(#2b2d30,#1b1c1e);border:7px solid #e8b100;border-radius:22px;padding:14px 14px 16px;box-shadow:0 10px 30px rgba(0,0,0,.6)}
+  #det .brand{color:#e8b100;font-size:12px;letter-spacing:3px;text-align:center;margin-bottom:8px;font-weight:bold}
+  #det .lcd{background:#9fb59a;border-radius:6px;padding:8px 10px;font-family:"DejaVu Sans Mono",monospace;color:#13200f;box-shadow:inset 0 0 12px rgba(0,0,0,.45)}
+  #det .row{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;padding:3px 0;border-bottom:1px solid rgba(0,0,0,.12)}
+  #det .row:last-child{border-bottom:0}
+  #det .v{font-size:24px;font-weight:bold}
+  #det .u{font-size:11px;margin-left:3px}
+  #det .stat{margin-top:10px;text-align:center;font-weight:bold;font-size:15px;padding:6px;border-radius:5px;letter-spacing:1px}
+  #det .led{position:absolute;top:-3px;left:50%;width:60px;margin-left:-30px;height:10px;border-radius:5px;background:#333}
+  #det.alarm .lcd{background:#e9a09a}
+  #end{background:linear-gradient(90deg,rgba(0,0,0,.85),rgba(0,0,0,.6) 60%,rgba(0,0,0,.3));display:flex;flex-direction:column;justify-content:center;padding-left:110px;color:#fff;opacity:0}
+  #end h2{font-size:40px;margin:0 0 22px;color:#f5b400}
+  #end ol{margin:0;padding-left:28px;font-size:23px;line-height:1.75}
+  #end .f{margin-top:28px;font-size:16px;color:#aaa}
+</style></head>
+<body>
+<div id="title" class="ov"><div class="k">MAINTENANCE INDUSTRIELLE · SÉCURITÉ</div><h1>Travail en espace confiné</h1><div class="s">Intervention dans une cuve enterrée — les étapes clés</div><div class="bar"></div></div>
+<div id="cap"><div class="step" id="capstep"></div><div class="txt"><div id="captxt"></div><div class="sub" id="capsub"></div></div></div>
+<div id="rec"><b>●</b> REC &nbsp;CAM CASQUE 02 &nbsp;<span id="tc"></span></div>
+<div id="det"><div class="body" style="position:relative"><div class="led" id="led"></div><div class="brand">DÉTECTEUR 4 GAZ</div><div class="lcd">
+  <div class="row"><span>O₂</span><span><span class="v" id="o2">--.-</span><span class="u">%VOL</span></span></div>
+  <div class="row"><span>LIE</span><span><span class="v" id="lie">--</span><span class="u">%</span></span></div>
+  <div class="row"><span>H₂S</span><span><span class="v" id="h2s">--</span><span class="u">ppm</span></span></div>
+  <div class="row"><span>CO</span><span><span class="v" id="co">--</span><span class="u">ppm</span></span></div>
+</div><div class="stat" id="stat">MESURE…</div></div></div>
+<div id="end" class="ov"><h2>À retenir</h2><ol>
+  <li>Permis de travail et analyse des risques avant toute entrée</li>
+  <li>Consignation des énergies et des fluides</li>
+  <li>Mesure de l'atmosphère avant et pendant l'intervention</li>
+  <li>Ventilation mécanique en continu</li>
+  <li>Harnais, trépied et treuil — surveillant présent en permanence</li>
+  <li>Plan de secours prêt : on ne descend jamais secourir sans protection</li>
+</ol><div class="f">Vidéo de sensibilisation — ne remplace pas la formation ni les procédures de votre site.</div></div>
+<div id="fade" class="ov"></div>
+
+<script type="module">
+import * as THREE from './node_modules/three/build/three.module.js';
+const W=1280,H=720;
+// ---------- deterministic random ----------
+let seed=1337;function rnd(){seed=(seed*16807)%2147483647;return (seed-1)/2147483646;}
+// value noise
+function makeNoise(n){const g=new Float32Array(n*n);for(let i=0;i<n*n;i++)g[i]=rnd();
+  return (x,y)=>{x=((x%n)+n)%n;y=((y%n)+n)%n;const x0=Math.floor(x),y0=Math.floor(y),fx=x-x0,fy=y-y0,x1=(x0+1)%n,y1=(y0+1)%n;
+    const sx=fx*fx*(3-2*fx),sy=fy*fy*(3-2*fy);const a=g[y0*n+x0],b=g[y0*n+x1],c=g[y1*n+x0],d=g[y1*n+x1];
+    return a+(b-a)*sx+(c-a)*sy+(a-b-c+d)*sx*sy;};}
+const nz=makeNoise(256);
+function fbm(x,y,o=5){let s=0,a=.5,f=1;for(let i=0;i<o;i++){s+=a*nz(x*f,y*f);a*=.5;f*=2.03;}return s;}
+function canvasTex(size,fn,repX=1,repY=1){const c=document.createElement('canvas');c.width=c.height=size;const ctx=c.getContext('2d');
+  const img=ctx.createImageData(size,size);fn(img.data,size,ctx);ctx.putImageData(img,0,0);
+  const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(repX,repY);t.anisotropy=8;t.colorSpace=THREE.SRGBColorSpace;return {t,c,ctx};}
+function grayTex(srcCanvas,repX,repY){const t=new THREE.CanvasTexture(srcCanvas);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(repX,repY);return t;}
+const clamp=(v,a=0,b=1)=>Math.min(b,Math.max(a,v));
+const sm=(a,b,x)=>{const t=clamp((x-a)/(b-a));return t*t*(3-2*t);};
+const lerp=(a,b,t)=>a+(b-a)*t;
+
+// ---------- textures ----------
+const S=512;
+// concrete floor
+const concreteH=[];
+const concrete=canvasTex(S,(d,s)=>{for(let y=0;y<s;y++)for(let x=0;x<s;x++){const u=x/s*16,v=y/s*16;
+  let n=fbm(u,v,6);const st=fbm(u*.25+40,v*.25,4);const sp=nz(x*1.7,y*1.7)>0.93?-0.12:0;
+  let l=0.50+0.22*(n-0.5)-0.18*sm(0.55,0.75,st)+sp;const i=(y*s+x)*4;concreteH.push(n);
+  d[i]=255*l*1.0;d[i+1]=255*l*0.99;d[i+2]=255*l*0.95;d[i+3]=255;}},10,10);
+const concreteBump=canvasTex(S,(d,s)=>{for(let y=0;y<s;y++)for(let x=0;x<s;x++){const l=fbm(x/s*48,y/s*48,3);const i=(y*s+x)*4;d[i]=d[i+1]=d[i+2]=255*l;d[i+3]=255;}},10,10);
+// shaft concrete (darker, wet stains)
+const shaft=canvasTex(S,(d,s)=>{for(let y=0;y<s;y++)for(let x=0;x<s;x++){const u=x/s*8,v=y/s*8;
+  const n=fbm(u,v,6);const streak=fbm(u*3,v*.3+10,3);let l=0.36+0.2*(n-.5)-0.15*sm(0.5,0.8,streak);
+  const i=(y*s+x)*4;d[i]=255*l*1.02;d[i+1]=255*l;d[i+2]=255*l*0.92;d[i+3]=255;}},2,1);
+// rusty steel
+const rust=canvasTex(S,(d,s)=>{for(let y=0;y<s;y++)for(let x=0;x<s;x++){const u=x/s*8,v=y/s*8;
+  const r=fbm(u*1.3+7,v*1.3,6);const streak=fbm(u*6,v*.4+3,4);const n=fbm(u*4,v*4,4);
+  const rm=sm(0.45,0.7,r*0.7+streak*0.5);
+  let R=lerp(0.30,0.42,rm),G=lerp(0.30,0.20,rm),B=lerp(0.30,0.10,rm);
+  const k=0.75+0.5*(n-.5);const seam=(Math.abs((y%(s/3))-2)<2.2||Math.abs((x%(s/2))-2)<2.2)?0.55:1;
+  const dark=1-0.35*sm(0.6,0.85,streak);
+  const i=(y*s+x)*4;d[i]=255*clamp(R*k*seam*dark*1.3);d[i+1]=255*clamp(G*k*seam*dark*1.3);d[i+2]=255*clamp(B*k*seam*dark*1.3);d[i+3]=255;}},4,1);
+const rustRough=canvasTex(S,(d,s)=>{for(let y=0;y<s;y++)for(let x=0;x<s;x++){const u=x/s*8,v=y/s*8;const r=fbm(u*1.3+7,v*1.3,6);
+  const l=0.55+0.4*sm(0.4,0.7,r);const i=(y*s+x)*4;d[i]=d[i+1]=d[i+2]=255*l;d[i+3]=255;}},4,1);
+// corrugated wall panels
+const wallT=canvasTex(S,(d,s)=>{for(let y=0;y<s;y++)for(let x=0;x<s;x++){const c=0.5+0.5*Math.cos(x/s*Math.PI*2*16);
+  const dirt=fbm(x/s*6,y/s*6+20,5);const grime=sm(0.6,1.0,y/s)*0.25;
+  let l=0.62+0.12*c-0.2*(dirt-.5)-grime;const i=(y*s+x)*4;d[i]=255*l*0.93;d[i+1]=255*l*0.96;d[i+2]=255*l;d[i+3]=255;}},6,1);
+// sludge
+const sludge=canvasTex(256,(d,s)=>{for(let y=0;y<s;y++)for(let x=0;x<s;x++){const n=fbm(x/s*10,y/s*10,5);let l=0.12+0.12*n;
+  const i=(y*s+x)*4;d[i]=255*l*1.25;d[i+1]=255*l*1.0;d[i+2]=255*l*0.7;d[i+3]=255;}},3,3);
+// hazard stripes
+function stripes(c1,c2,n=8){return canvasTex(128,(d,s)=>{for(let y=0;y<s;y++)for(let x=0;x<s;x++){const k=Math.floor(((x+y)/s)*n)%2;
+  const dirt=0.85+0.15*nz(x*.3,y*.3);const c=k?c1:c2;const i=(y*s+x)*4;d[i]=c[0]*dirt;d[i+1]=c[1]*dirt;d[i+2]=c[2]*dirt;d[i+3]=255;}});}
+const yb=stripes([230,175,0],[25,25,25]);
+const rw=stripes([200,20,20],[235,235,235]);rw.t.repeat.set(1,6);
+// ribbed duct
+const duct=canvasTex(128,(d,s)=>{for(let y=0;y<s;y++)for(let x=0;x<s;x++){const r=0.5+0.5*Math.cos(x/s*Math.PI*2*8);
+  const l=0.55+0.35*r;const i=(y*s+x)*4;d[i]=235*l;d[i+1]=180*l;d[i+2]=30*l;d[i+3]=255;}},40,1);
+// sign
+function signTex(){const c=document.createElement('canvas');c.width=512;c.height=700;const g=c.getContext('2d');
+  g.fillStyle='#f4f1e8';g.fillRect(0,0,512,700);g.fillStyle='#c8102e';g.fillRect(0,0,512,130);
+  g.fillStyle='#fff';g.font='bold 92px DejaVu Sans';g.textAlign='center';g.fillText('DANGER',256,100);
+  g.fillStyle='#f5b400';g.strokeStyle='#111';g.lineWidth=14;g.beginPath();g.moveTo(256,170);g.lineTo(400,420);g.lineTo(112,420);g.closePath();g.fill();g.stroke();
+  g.fillStyle='#111';g.font='bold 170px DejaVu Sans';g.fillText('!',256,400);
+  g.font='bold 54px DejaVu Sans';g.fillText('ESPACE',256,500);g.fillText('CONFINÉ',256,558);
+  g.font='bold 30px DejaVu Sans';g.fillText('ENTRÉE SOUS PERMIS',256,620);g.fillText('SURVEILLANT OBLIGATOIRE',256,662);
+  // grime
+  for(let i=0;i<4000;i++){g.fillStyle=`rgba(60,50,40,${rnd()*0.05})`;g.fillRect(rnd()*512,rnd()*700,rnd()*14,rnd()*14);}
+  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;}
+function tagTex(){const c=document.createElement('canvas');c.width=256;c.height=128;const g=c.getContext('2d');
+  g.fillStyle='#c8102e';g.fillRect(0,0,256,128);g.fillStyle='#fff';g.font='bold 34px DejaVu Sans';g.textAlign='center';
+  g.fillText('CONSIGNÉ',128,55);g.font='20px DejaVu Sans';g.fillText('NE PAS MANŒUVRER',128,95);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;}
+
+// ---------- renderer ----------
+const renderer=new THREE.WebGLRenderer({antialias:false,preserveDrawingBuffer:true});
+renderer.setSize(W,H);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+const rt=new THREE.WebGLRenderTarget(W,H,{type:THREE.HalfFloatType,samples:4});
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x0b0c0d);
+scene.fog=new THREE.FogExp2(0x1a1c1e,0.035);
+const camera=new THREE.PerspectiveCamera(50,W/H,0.02,120);scene.add(camera);
+
+// post pass
+const post=new THREE.ShaderMaterial({uniforms:{tex:{value:rt.texture},time:{value:0},exposure:{value:1},vig:{value:0.9},grain:{value:0.05},ca:{value:0.0015},sat:{value:0.9},tint:{value:new THREE.Vector3(1,1,1)}},
+  vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}`,
+  fragmentShader:`uniform sampler2D tex;uniform float time,exposure,vig,grain,ca,sat;uniform vec3 tint;varying vec2 vUv;
+  vec3 aces(vec3 x){const float a=2.51,b=0.03,c=2.43,d=0.59,e=0.14;return clamp((x*(a*x+b))/(x*(c*x+d)+e),0.,1.);}
+  float h(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
+  void main(){vec2 d=vUv-.5;float r2=dot(d,d);
+    vec3 col;col.r=texture2D(tex,vUv-d*ca*8.*r2*4.).r;col.g=texture2D(tex,vUv).g;col.b=texture2D(tex,vUv+d*ca*8.*r2*4.).b;
+    // soft bloom-ish glow
+    vec3 b=vec3(0.);for(int i=0;i<8;i++){float a=float(i)*0.785;vec2 o=vec2(cos(a),sin(a))*0.006;b+=max(texture2D(tex,vUv+o).rgb-1.2,0.)+max(texture2D(tex,vUv+o*2.5).rgb-1.2,0.);}
+    col+=b*0.07;
+    col*=exposure*tint;col=aces(col);
+    float l=dot(col,vec3(.299,.587,.114));col=mix(vec3(l),col,sat);
+    col*=1.-vig*smoothstep(0.08,0.55,r2*1.6);
+    col=pow(col,vec3(1./2.2));
+    col+=(h(vUv*vec2(1280.,720.)+time*91.7)-.5)*grain;
+    gl_FragColor=vec4(col,1.);}`,depthTest:false,depthWrite:false});
+const postScene=new THREE.Scene();const postCam=new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2),post));
+
+// ---------- materials ----------
+const M={
+  floor:new THREE.MeshStandardMaterial({map:concrete.t,bumpMap:concreteBump.t,bumpScale:0.6,roughness:0.92}),
+  shaft:new THREE.MeshStandardMaterial({map:shaft.t,bumpMap:grayTex(shaft.c,2,1),bumpScale:2,roughness:0.85,side:THREE.BackSide}),
+  rust:new THREE.MeshStandardMaterial({map:rust.t,roughnessMap:rustRough.t,bumpMap:grayTex(rust.c,4,1),bumpScale:1.5,metalness:0.35,roughness:1.0,side:THREE.BackSide}),
+  rustF:new THREE.MeshStandardMaterial({map:rust.t,roughnessMap:rustRough.t,metalness:0.55,roughness:0.8,side:THREE.DoubleSide}),
+  wall:new THREE.MeshStandardMaterial({map:wallT.t,roughness:0.6,metalness:0.3}),
+  steel:new THREE.MeshStandardMaterial({color:0x9aa0a6,metalness:0.85,roughness:0.35}),
+  alu:new THREE.MeshStandardMaterial({color:0xc9cdd2,metalness:0.9,roughness:0.28}),
+  darkSteel:new THREE.MeshStandardMaterial({color:0x3a3d40,metalness:0.7,roughness:0.5}),
+  yellow:new THREE.MeshStandardMaterial({color:0xe0a800,roughness:0.45,metalness:0.1}),
+  yb:new THREE.MeshStandardMaterial({map:yb.t,roughness:0.6}),
+  rw:new THREE.MeshStandardMaterial({map:rw.t,roughness:0.55}),
+  duct:new THREE.MeshStandardMaterial({map:duct.t,bumpMap:grayTex(duct.c,40,1),bumpScale:3,roughness:0.7,side:THREE.DoubleSide}),
+  black:new THREE.MeshStandardMaterial({color:0x151515,roughness:0.7}),
+  sludge:new THREE.MeshStandardMaterial({map:sludge.t,roughness:0.4,metalness:0.1}),
+  pipe:new THREE.MeshStandardMaterial({color:0x4b5a4a,roughness:0.55,metalness:0.6}),
+  red:new THREE.MeshStandardMaterial({color:0xb0141e,roughness:0.5}),
+  cable:new THREE.MeshStandardMaterial({color:0x777777,metalness:0.9,roughness:0.4}),
+  navy:new THREE.MeshStandardMaterial({color:0x1d2633,roughness:0.85}),
+  vest:new THREE.MeshStandardMaterial({color:0xff6a00,roughness:0.75,emissive:0x2a0e00}),
+  vestY:new THREE.MeshStandardMaterial({color:0xd8e000,roughness:0.75,emissive:0x121400}),
+  refl:new THREE.MeshStandardMaterial({color:0xdadada,roughness:0.25,metalness:0.6,emissive:0x222222}),
+  skin:new THREE.MeshStandardMaterial({color:0xc69072,roughness:0.6}),
+  helmetW:new THREE.MeshStandardMaterial({color:0xf2f2f0,roughness:0.3}),
+  helmetY:new THREE.MeshStandardMaterial({color:0xf2c200,roughness:0.3}),
+  glove:new THREE.MeshStandardMaterial({color:0x6b6b2a,roughness:0.9}),
+  strap:new THREE.MeshStandardMaterial({color:0x202020,roughness:0.8}),
+  lampE:new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xfff2d8,emissiveIntensity:6}),
+};
+function mesh(g,m,cast=true,recv=true){const o=new THREE.Mesh(g,m);o.castShadow=cast;o.receiveShadow=recv;return o;}
+function cyl(r1,r2,h,m,seg=24){return mesh(new THREE.CylinderGeometry(r1,r2,h,seg),m);}
+function between(a,b,r,m){const d=new THREE.Vector3().subVectors(b,a);const o=cyl(r,r,d.length(),m,12);o.position.copy(a).addScaledVector(d,.5);
+  o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());return o;}
+
+// ---------- hall ----------
+const HR=0.38; // manhole radius
+const fs=new THREE.Shape();fs.moveTo(-30,-30);fs.lineTo(30,-30);fs.lineTo(30,30);fs.lineTo(-30,30);fs.closePath();
+const hp=new THREE.Path();hp.absarc(0,0,0.64,0,Math.PI*2,true);fs.holes.push(hp);
+const floorG=new THREE.ShapeGeometry(fs,64);{const p=floorG.attributes.position,uv=floorG.attributes.uv;for(let i=0;i<p.count;i++)uv.setXY(i,p.getX(i)/6,p.getY(i)/6);}
+concrete.t.repeat.set(1,1);concreteBump.t.repeat.set(1,1);
+const floor=mesh(floorG,M.floor,false,true);floor.rotation.x=-Math.PI/2;scene.add(floor);
+// painted walkway lines
+for(const z of [3.2,-3.6]){const l=mesh(new THREE.PlaneGeometry(40,0.12),new THREE.MeshStandardMaterial({color:0xc9a400,roughness:0.8}),false,true);l.rotation.x=-Math.PI/2;l.position.set(0,0.003,z);scene.add(l);}
+// collar
+const collar=mesh(new THREE.LatheGeometry([new THREE.Vector2(HR,-0.25),new THREE.Vector2(HR,0.07),new THREE.Vector2(0.6,0.08),new THREE.Vector2(0.66,0.0)],48),new THREE.MeshStandardMaterial({map:shaft.t,roughness:0.9,side:THREE.DoubleSide}));scene.add(collar);
+// frame ring (steel)
+const ringF=mesh(new THREE.TorusGeometry(HR+0.02,0.025,8,48),M.darkSteel);ringF.rotation.x=Math.PI/2;ringF.position.y=0.08;scene.add(ringF);
+// manhole lid lying aside
+const lid=cyl(0.42,0.42,0.05,M.darkSteel,48);lid.position.set(-0.95,0.025,-0.55);scene.add(lid);
+for(let i=-3;i<=3;i++){const b=mesh(new THREE.BoxGeometry(0.7,0.012,0.03),M.darkSteel);b.position.set(-0.95,0.055,-0.55+i*0.1);b.scale.x=Math.sqrt(1-(i*0.1/0.42)**2);scene.add(b);}
+// walls
+const back=mesh(new THREE.PlaneGeometry(40,10),M.wall,false,true);back.position.set(0,5,-11);scene.add(back);
+const left=mesh(new THREE.PlaneGeometry(40,10),M.wall,false,true);left.position.set(-12,5,0);left.rotation.y=Math.PI/2;scene.add(left);
+const right=mesh(new THREE.PlaneGeometry(40,10),M.wall,false,true);right.position.set(12,5,0);right.rotation.y=-Math.PI/2;scene.add(right);
+const front=mesh(new THREE.PlaneGeometry(40,10),M.wall,false,true);front.position.set(0,5,12);front.rotation.y=Math.PI;scene.add(front);
+const ceil=mesh(new THREE.PlaneGeometry(40,40),new THREE.MeshStandardMaterial({color:0x2a2c2e,roughness:0.9}),false,false);ceil.rotation.x=Math.PI/2;ceil.position.y=10;scene.add(ceil);
+// columns (H beams)
+for(const x of [-8,-2.5,3,8.5])for(const z of [-10.6]){const c=mesh(new THREE.BoxGeometry(0.35,10,0.35),M.yellow);c.position.set(x,5,z);scene.add(c);
+  const s=mesh(new THREE.BoxGeometry(0.42,1.2,0.42),M.yb);s.position.set(x,0.6,z);scene.add(s);}
+for(const z of [-6,0,6]){const c=mesh(new THREE.BoxGeometry(0.35,10,0.35),M.yellow);c.position.set(-11.7,5,z);scene.add(c);}
+// pipe racks along back wall
+for(let k=0;k<4;k++){const p=cyl(0.14+k*0.03,0.14+k*0.03,40,[M.pipe,M.steel,M.red,M.darkSteel][k],16);p.rotation.z=Math.PI/2;p.position.set(0,3.2+k*0.45,-10.5+k*0.05);scene.add(p);}
+for(let x=-10;x<=10;x+=2.5){const fl=cyl(0.25,0.25,0.06,M.steel,16);fl.rotation.z=Math.PI/2;fl.position.set(x,3.2,-10.5);scene.add(fl);}
+// vertical pipe + valve on back wall
+{const vp=cyl(0.12,0.12,3.2,M.pipe,16);vp.position.set(1.2,1.6,-10.4);scene.add(vp);}
+// pallets / IBC tank / cabinet for scenery
+{const ibc=new THREE.Group();const cage=mesh(new THREE.BoxGeometry(1.2,1.1,1.0),new THREE.MeshStandardMaterial({color:0xe9e9e4,roughness:0.4,transparent:true,opacity:0.85}));cage.position.y=0.7;ibc.add(cage);
+ const pal=mesh(new THREE.BoxGeometry(1.25,0.15,1.05),M.darkSteel);pal.position.y=0.075;ibc.add(pal);ibc.position.set(-6,0,-8.5);scene.add(ibc);
+ const ibc2=ibc.clone();ibc2.position.set(-4.6,0,-8.6);scene.add(ibc2);}
+{const cab=mesh(new THREE.BoxGeometry(1.0,2.0,0.5),M.red);cab.position.set(6,1,-10.5);scene.add(cab);}
+// overhead lights
+const ceilingLights=[];
+for(const [x,z] of [[-6,-4],[0,-4],[6,-4],[-6,4],[0,4],[6,4]]){
+  const f=mesh(new THREE.BoxGeometry(1.4,0.08,0.3),M.darkSteel,false,false);f.position.set(x,7.5,z);scene.add(f);
+  const e=mesh(new THREE.BoxGeometry(1.3,0.02,0.22),M.lampE,false,false);e.position.set(x,7.45,z);scene.add(e);
+  const L=new THREE.PointLight(0xffe7c4,26,24,1.6);L.position.set(x,7.2,z);scene.add(L);ceilingLights.push(L);}
+const key=new THREE.SpotLight(0xfff0dc,140,30,0.55,0.6,1.5);key.position.set(2.5,7.4,2.5);key.target.position.set(0,0,0);key.castShadow=true;key.shadow.mapSize.set(2048,2048);key.shadow.bias=-0.0004;key.shadow.radius=4;scene.add(key,key.target);
+const hemi=new THREE.HemisphereLight(0x8c97a3,0x2a2622,0.35);scene.add(hemi);
+
+// ---------- underground: shaft + chamber ----------
+const SH=1.2, CH_R=2.0, CH_TOP=-SH, CH_BOT=-4.2;
+const shaftM=mesh(new THREE.CylinderGeometry(HR,HR,SH+0.25,32,1,true),M.shaft);shaftM.position.y=-SH/2+0.125-0.25/2;scene.add(shaftM);
+const chamber=mesh(new THREE.CylinderGeometry(CH_R,CH_R,CH_TOP-CH_BOT,64,1,true),M.rust);chamber.position.y=(CH_TOP+CH_BOT)/2;scene.add(chamber);
+const ctop=mesh(new THREE.RingGeometry(HR,CH_R,64),M.rustF);ctop.rotation.x=Math.PI/2;ctop.position.y=CH_TOP;scene.add(ctop);
+const cbot=mesh(new THREE.CircleGeometry(CH_R,64),M.sludge,false,true);cbot.rotation.x=-Math.PI/2;cbot.position.y=CH_BOT+0.04;scene.add(cbot);
+const cbot2=mesh(new THREE.CircleGeometry(CH_R,64),M.rustF,false,true);cbot2.rotation.x=-Math.PI/2;cbot2.position.y=CH_BOT;scene.add(cbot2);
+// ladder (against shaft wall, -z side)
+const ladder=new THREE.Group();const lz=HR-0.07;
+for(const x of [-0.17,0.17]){const r=cyl(0.018,0.018,4.3,M.steel,10);r.position.set(x,(0.05+CH_BOT)/2,lz);ladder.add(r);}
+for(let y=-0.15;y>CH_BOT+0.1;y-=0.28){const g=cyl(0.014,0.014,0.34,M.steel,8);g.rotation.z=Math.PI/2;g.position.set(0,y,lz);ladder.add(g);}
+// ladder in chamber needs standoff to chamber wall: brackets
+scene.add(ladder);
+// chamber pipes
+const pipeIn1=cyl(0.16,0.16,4.0,M.pipe,20);pipeIn1.rotation.z=Math.PI/2;pipeIn1.position.set(0,-3.0,-1.25);scene.add(pipeIn1);
+for(const x of [-0.9,0.9]){const f=cyl(0.24,0.24,0.06,M.steel,20);f.rotation.z=Math.PI/2;f.position.set(x,-3.0,-1.25);scene.add(f);
+  for(let k=0;k<8;k++){const a=k/8*Math.PI*2;const b=cyl(0.015,0.015,0.1,M.steel,6);b.rotation.z=Math.PI/2;b.position.set(x,-3.0+Math.cos(a)*0.2,-1.25+Math.sin(a)*0.2);scene.add(b);}}
+// valve on pipe
+const valveBody=mesh(new THREE.SphereGeometry(0.24,20,14),M.pipe);valveBody.position.set(0.3,-3.0,-1.25);scene.add(valveBody);
+const stem=cyl(0.03,0.03,0.45,M.steel,8);stem.position.set(0.3,-2.65,-1.25);scene.add(stem);
+const wheel=mesh(new THREE.TorusGeometry(0.2,0.022,8,32),M.red);wheel.rotation.x=Math.PI/2;wheel.position.set(0.3,-2.42,-1.25);scene.add(wheel);
+for(let k=0;k<3;k++){const s=cyl(0.012,0.012,0.4,M.red,6);s.rotation.z=Math.PI/2;s.rotation.y=k*Math.PI/3;s.position.set(0.3,-2.42,-1.25);scene.add(s);}
+// lockout tag on valve
+const tag=mesh(new THREE.PlaneGeometry(0.16,0.08),new THREE.MeshStandardMaterial({map:tagTex(),roughness:0.6,side:THREE.DoubleSide}));tag.position.set(0.3,-2.55,-1.06);tag.rotation.x=-0.15;scene.add(tag);
+const padlock=mesh(new THREE.BoxGeometry(0.05,0.06,0.025),M.red);padlock.position.set(0.3,-2.46,-1.08);scene.add(padlock);
+// vertical pipe in chamber + elbow
+const vpipe=cyl(0.12,0.12,3.0,M.pipe,16);vpipe.position.set(1.5,-2.7,0.6);scene.add(vpipe);
+const elbowPipe=cyl(0.1,0.1,1.6,M.darkSteel,16);elbowPipe.rotation.x=Math.PI/2;elbowPipe.position.set(-1.3,-3.7,0.4);scene.add(elbowPipe);
+// sediment ridges / debris
+for(let i=0;i<14;i++){const r=0.04+rnd()*0.12;const d=mesh(new THREE.SphereGeometry(r,8,6),new THREE.MeshStandardMaterial({color:0x2a2018,roughness:0.95}));const a=rnd()*Math.PI*2,rr=0.6+rnd()*1.2;d.scale.y=0.35;d.position.set(Math.cos(a)*rr,CH_BOT+0.04,Math.sin(a)*rr);scene.add(d);}
+// light falling in from the manhole
+const shaftLight=new THREE.SpotLight(0xdfe6ee,22,8,0.32,0.8,1.4);shaftLight.position.set(0,0.4,0);shaftLight.target.position.set(0.1,CH_BOT,0.1);scene.add(shaftLight,shaftLight.target);
+const chamberFill=new THREE.PointLight(0x6d5a48,0.6,6,2);chamberFill.position.set(0,-2.6,0);scene.add(chamberFill);
+
+// ---------- tripod + winch ----------
+const head=new THREE.Vector3(0,2.25,0);const legs=[];const tri=new THREE.Group();
+for(let k=0;k<3;k++){const a=Math.PI/2+k*Math.PI*2/3+0.3;const foot=new THREE.Vector3(Math.cos(a)*1.05,0.02,Math.sin(a)*1.05);legs.push(foot);
+  tri.add(between(foot,head,0.032,M.alu));const shoe=mesh(new THREE.BoxGeometry(0.12,0.04,0.12),M.black);shoe.position.copy(foot);tri.add(shoe);}
+const headBlock=mesh(new THREE.BoxGeometry(0.2,0.14,0.2),M.yellow);headBlock.position.copy(head);tri.add(headBlock);
+const pulley=mesh(new THREE.TorusGeometry(0.06,0.02,8,20),M.steel);pulley.position.set(0,2.12,0);tri.add(pulley);
+// chain between feet
+for(let k=0;k<3;k++){const a=legs[k],b=legs[(k+1)%3];const m=a.clone().lerp(b,.5);m.y=0.06;tri.add(between(a.clone().setY(0.06),b.clone().setY(0.06),0.008,M.darkSteel));}
+// winch on leg 0
+const wLeg=legs[2];const wPos=wLeg.clone().lerp(head,0.38);
+const winch=new THREE.Group();winch.position.copy(wPos);
+const wBody=mesh(new THREE.BoxGeometry(0.22,0.28,0.18),M.yellow);winch.add(wBody);
+const drum=cyl(0.07,0.07,0.16,M.steel,16);drum.rotation.z=Math.PI/2;drum.position.set(0,0,0.12);winch.add(drum);
+const crank=new THREE.Group();crank.position.set(0.14,0,0.12);const ca=mesh(new THREE.BoxGeometry(0.02,0.2,0.03),M.darkSteel);ca.position.y=0.1;crank.add(ca);
+const kn=cyl(0.02,0.02,0.09,M.black,8);kn.rotation.z=Math.PI/2;kn.position.set(0.05,0.2,0);crank.add(kn);winch.add(crank);
+tri.add(winch);scene.add(tri);
+// cable: winch -> head pulley -> down the hole (dynamic end)
+const cableUp=between(wPos.clone().add(new THREE.Vector3(0,0.07,0.12)),new THREE.Vector3(0,2.18,0),0.005,M.cable);tri.add(cableUp);
+let cableDown=null;function setCable(yEnd){if(cableDown){scene.remove(cableDown);cableDown.geometry.dispose();}
+  cableDown=between(new THREE.Vector3(0,2.1,0),new THREE.Vector3(0,yEnd,0),0.005,M.cable);cableDown.castShadow=false;scene.add(cableDown);}
+
+// ---------- barriers ----------
+const bpts=[[-1.6,1.6],[1.6,1.6],[1.6,-1.6],[-1.6,-1.6]];
+for(const [x,z] of bpts){const p=cyl(0.03,0.03,1.0,M.rw,10);p.position.set(x,0.5,z);scene.add(p);const base=cyl(0.17,0.2,0.06,M.black,16);base.position.set(x,0.03,z);scene.add(base);}
+for(let k=0;k<3;k++){const a=bpts[k],b=bpts[k+1];const m=between(new THREE.Vector3(a[0],0.92,a[1]),new THREE.Vector3(b[0],0.92,b[1]),0.025,M.rw);scene.add(m);}
+// sign on stand
+const signG=new THREE.Group();const sp=mesh(new THREE.PlaneGeometry(0.5,0.68),new THREE.MeshStandardMaterial({map:signTex(),roughness:0.5}));sp.position.y=1.15;sp.position.z=0.012;signG.add(sp);
+const sb=mesh(new THREE.BoxGeometry(0.52,0.7,0.02),M.darkSteel);sb.position.y=1.15;signG.add(sb);
+{const pole=cyl(0.02,0.02,0.82,M.darkSteel,8);pole.position.set(0,0.41,-0.02);signG.add(pole);}
+const sbase=mesh(new THREE.BoxGeometry(0.5,0.05,0.35),M.black);sbase.position.y=0.025;signG.add(sbase);
+signG.position.set(1.95,0,1.75);signG.rotation.y=-0.45;scene.add(signG);
+
+// ---------- ventilation fan + duct ----------
+const fan=new THREE.Group();fan.position.set(-2.0,0,1.1);fan.rotation.y=-0.6;
+const fanBody=mesh(new THREE.CylinderGeometry(0.24,0.24,0.38,28,1,true),M.yellow);fanBody.material=M.yellow.clone();fanBody.material.side=THREE.DoubleSide;fanBody.rotation.z=Math.PI/2;fanBody.position.y=0.42;fan.add(fanBody);
+const guard=mesh(new THREE.TorusGeometry(0.24,0.012,6,28),M.darkSteel);guard.rotation.y=Math.PI/2;guard.position.set(-0.19,0.42,0);fan.add(guard);
+for(let k=-3;k<=3;k++){const g=cyl(0.005,0.005,0.48*Math.sqrt(1-(k/3.6)**2),M.darkSteel,4);g.position.set(-0.19,0.42,k*0.065);fan.add(g);}
+const blades=new THREE.Group();blades.position.set(-0.08,0.42,0);
+for(let k=0;k<5;k++){const b=mesh(new THREE.BoxGeometry(0.01,0.2,0.07),M.darkSteel);b.position.y=0.1;const piv=new THREE.Group();piv.rotation.x=k*Math.PI*2/5;b.rotation.y=0.4;piv.add(b);blades.add(piv);}
+const hub=mesh(new THREE.SphereGeometry(0.04,10,8),M.darkSteel);blades.add(hub);fan.add(blades);
+const fanFrame=mesh(new THREE.BoxGeometry(0.45,0.04,0.4),M.darkSteel);fanFrame.position.y=0.16;fan.add(fanFrame);
+for(const [x,z] of [[-0.18,-0.16],[0.18,-0.16],[-0.18,0.16],[0.18,0.16]]){const l=cyl(0.012,0.012,0.18,M.darkSteel,6);l.position.set(x,0.08,z);fan.add(l);}
+scene.add(fan);
+fan.updateMatrixWorld();
+const outlet=new THREE.Vector3(0.2,0.42,0).applyMatrix4(fan.matrixWorld);
+const ductCurve=new THREE.CatmullRomCurve3([outlet,outlet.clone().add(new THREE.Vector3(0.35,-0.1,-0.2)),new THREE.Vector3(-0.85,0.12,0.55),new THREE.Vector3(-0.3,0.22,0.15),new THREE.Vector3(-0.15,-0.2,0.1),new THREE.Vector3(-0.2,-1.0,0.12),new THREE.Vector3(-0.6,-2.0,0.4),new THREE.Vector3(-0.9,-3.2,0.6)]);
+const ductM=mesh(new THREE.TubeGeometry(ductCurve,140,0.15,18,false),M.duct);scene.add(ductM);
+
+// ---------- workers ----------
+function worker(vestMat,helmetMat){const g=new THREE.Group();const P={};
+  for(const s of [-1,1]){const leg=mesh(new THREE.CapsuleGeometry(0.075,0.62,6,12),M.navy);leg.position.set(s*0.1,0.48,0);g.add(leg);
+    const boot=mesh(new THREE.BoxGeometry(0.12,0.1,0.26),M.black);boot.position.set(s*0.1,0.05,0.04);g.add(boot);}
+  const hips=mesh(new THREE.CapsuleGeometry(0.15,0.08,6,14),M.navy);hips.scale.z=0.7;hips.position.y=0.9;g.add(hips);
+  const torso=mesh(new THREE.CapsuleGeometry(0.17,0.38,8,16),vestMat);torso.scale.z=0.68;torso.position.y=1.2;g.add(torso);
+  for(const y of [1.05,1.22]){const st=mesh(new THREE.CylinderGeometry(0.176,0.176,0.035,20,1,true),M.refl);st.scale.z=0.69;st.position.y=y;g.add(st);}
+  const neck=cyl(0.05,0.05,0.08,M.skin,10);neck.position.y=1.5;g.add(neck);
+  const headM=mesh(new THREE.SphereGeometry(0.105,20,16),M.skin);headM.scale.set(0.95,1.1,1);headM.position.y=1.62;g.add(headM);
+  const helm=mesh(new THREE.SphereGeometry(0.125,20,12,0,Math.PI*2,0,Math.PI/2),helmetMat);helm.position.y=1.66;g.add(helm);
+  const brim=cyl(0.14,0.14,0.012,helmetMat,20);brim.scale.z=1.15;brim.position.set(0,1.665,0.02);g.add(brim);
+  for(const s of [-1,1]){const sh=new THREE.Group();sh.position.set(s*0.23,1.4,0);
+    const up=mesh(new THREE.CapsuleGeometry(0.055,0.24,6,10),vestMat===M.vest?M.navy:M.navy);up.position.y=-0.16;sh.add(up);
+    const el=new THREE.Group();el.position.y=-0.32;const fo=mesh(new THREE.CapsuleGeometry(0.048,0.22,6,10),M.navy);fo.position.y=-0.14;el.add(fo);
+    const gl=mesh(new THREE.SphereGeometry(0.055,10,8),M.glove);gl.position.y=-0.3;el.add(gl);sh.add(el);g.add(sh);P[s<0?'L':'R']={sh,el};}
+  P.root=g;return P;}
+const att=worker(M.vest,M.helmetW);att.root.position.set(1.45,0,-0.75);att.root.rotation.y=-2.0;scene.add(att.root);
+// rest pose
+att.L.sh.rotation.set(0.1,0,0.08);att.R.sh.rotation.set(0.1,0,-0.08);att.L.el.rotation.x=-0.3;att.R.el.rotation.x=-0.3;
+// radio in attendant's hand
+const radio=mesh(new THREE.BoxGeometry(0.06,0.14,0.035),M.black);radio.position.set(0,-0.36,0.04);att.L.el.add(radio);
+// entrant (harnessed)
+const ent=worker(M.vestY,M.helmetY);scene.add(ent.root);
+for(const y of [1.1,0.92]){const h=mesh(new THREE.CylinderGeometry(0.18,0.18,0.04,20,1,true),M.strap);h.scale.z=0.7;h.position.y=y;ent.root.add(h);}
+for(const s of [-1,1]){const st=mesh(new THREE.BoxGeometry(0.04,0.42,0.01),M.strap);st.position.set(s*0.08,1.25,0.12);st.rotation.z=s*0.15;ent.root.add(st);}
+const dring=mesh(new THREE.TorusGeometry(0.03,0.008,6,12),M.steel);dring.position.set(0,1.42,-0.12);ent.root.add(dring);
+const headlamp=mesh(new THREE.BoxGeometry(0.06,0.04,0.04),M.black);headlamp.position.set(0,1.69,0.12);ent.root.add(headlamp);
+const lampFace=mesh(new THREE.CircleGeometry(0.015,12),M.lampE);lampFace.position.set(0,1.69,0.141);ent.root.add(lampFace);
+ent.L.sh.rotation.set(-2.6,0,0.15);ent.R.sh.rotation.set(-2.6,0,-0.15);ent.L.el.rotation.x=-0.2;ent.R.el.rotation.x=-0.2;
+// headlamp light (attached to camera in POV)
+const head_l=new THREE.SpotLight(0xfff3e0,0,12,0.42,0.55,1.6);head_l.castShadow=true;head_l.shadow.mapSize.set(1024,1024);head_l.shadow.bias=-0.0006;head_l.shadow.camera.near=0.05;
+camera.add(head_l);head_l.position.set(0.05,0.08,0);head_l.target.position.set(0,0,-1);camera.add(head_l.target);
+// detector sampling hose (scene 2)
+const hoseCurve=new THREE.CatmullRomCurve3([new THREE.Vector3(0.35,1.05,0.75),new THREE.Vector3(0.18,0.5,0.4),new THREE.Vector3(0.05,0.1,0.1),new THREE.Vector3(0.0,-0.6,0.05),new THREE.Vector3(0.05,-2.2,0.1)]);
+const hose=mesh(new THREE.TubeGeometry(hoseCurve,80,0.008,8,false),new THREE.MeshStandardMaterial({color:0x2a2a2a,roughness:0.5}));scene.add(hose);
+const probe=new THREE.Group();const pbox=mesh(new THREE.BoxGeometry(0.09,0.16,0.04),M.yellow);probe.add(pbox);
+const pscr=mesh(new THREE.PlaneGeometry(0.06,0.05),new THREE.MeshStandardMaterial({color:0x9fb59a,emissive:0x3a4a36,emissiveIntensity:1}));pscr.position.set(0,0.03,0.021);probe.add(pscr);
+probe.position.set(0.36,1.1,0.78);probe.rotation.set(-0.7,0.3,0);scene.add(probe);
+const gloveH=mesh(new THREE.SphereGeometry(0.055,10,8),M.glove);gloveH.scale.set(1.2,0.8,1.4);gloveH.position.set(0.37,1.03,0.8);scene.add(gloveH);
+const sleeve=between(new THREE.Vector3(0.38,1.03,0.82),new THREE.Vector3(0.48,0.98,1.05),0.045,M.navy);scene.add(sleeve);
+sleeve.visible=false;const handGroup=[hose,probe,gloveH];
+
+// ---------- dust particles (lit inside headlamp cone) ----------
+const NP=2600;const pg=new THREE.BufferGeometry();const pp=new Float32Array(NP*3),ps=new Float32Array(NP);
+for(let i=0;i<NP;i++){const a=rnd()*Math.PI*2,r=Math.sqrt(rnd())*1.95;pp[i*3]=Math.cos(a)*r;pp[i*3+1]=CH_BOT+rnd()*(0.2-CH_BOT);pp[i*3+2]=Math.sin(a)*r;ps[i]=rnd();}
+pg.setAttribute('position',new THREE.BufferAttribute(pp,3));pg.setAttribute('seed',new THREE.BufferAttribute(ps,1));
+const dustMat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
+  uniforms:{camPos:{value:new THREE.Vector3()},camDir:{value:new THREE.Vector3()},time:{value:0},intensity:{value:0},flow:{value:0}},
+  vertexShader:`attribute float seed;uniform vec3 camPos,camDir;uniform float time,flow;varying float vB;
+  void main(){vec3 p=position;float t=time*0.15+seed*30.;p+=vec3(sin(t*1.3+seed*7.)*0.08,sin(t*0.7)*0.05-flow*mod(time*0.5+seed*4.,4.)*0.0,cos(t*1.1+seed*3.)*0.08);
+   p.x+=flow*sin(time*2.+seed*20.)*0.15;p.y-=flow*fract(time*0.25+seed)*1.2;
+   vec3 d=p-camPos;float dist=length(d);float c=dot(normalize(d),camDir);
+   vB=smoothstep(0.86,0.97,c)*smoothstep(4.5,0.3,dist)*smoothstep(0.08,0.3,dist)*(0.5+0.5*sin(time*3.+seed*50.));
+   vec4 mv=viewMatrix*vec4(p,1.);gl_Position=projectionMatrix*mv;gl_PointSize=clamp((0.6+seed*1.4)*(1.2/-mv.z),0.8,3.0);}`,
+  fragmentShader:`uniform float intensity;varying float vB;void main(){vec2 c=gl_PointCoord-.5;float a=smoothstep(.5,0.,length(c));gl_FragColor=vec4(vec3(1.,.93,.82)*a*vB*intensity,1.);}`});
+const dust=new THREE.Points(pg,dustMat);dust.frustumCulled=false;scene.add(dust);
+// shaft light beam (soft cone from manhole)
+const beam=new THREE.Mesh(new THREE.CylinderGeometry(HR*0.95,1.3,CH_TOP-CH_BOT+SH,32,1,true),new THREE.ShaderMaterial({transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,
+  uniforms:{k:{value:0.0}},vertexShader:`varying float vY;varying vec3 vN,vV;void main(){vY=uv.y;vec4 mv=modelViewMatrix*vec4(position,1.);vN=normalize(normalMatrix*normal);vV=normalize(-mv.xyz);gl_Position=projectionMatrix*mv;}`,
+  fragmentShader:`uniform float k;varying float vY;varying vec3 vN,vV;void main(){float f=pow(abs(dot(vN,vV)),2.);gl_FragColor=vec4(vec3(.8,.85,.9)*k*f*vY*vY,1.);}`}));
+beam.position.y=(0+CH_BOT)/2;scene.add(beam);
+// drips
+const drips=[];for(let i=0;i<5;i++){const d=mesh(new THREE.SphereGeometry(0.008,6,5),new THREE.MeshStandardMaterial({color:0x99aabb,roughness:0.05,metalness:0.3}),false,false);d.userData={x:-1+rnd()*2,z:-1.2+rnd()*1.0,ph:rnd()*3,per:1.6+rnd()*1.5};scene.add(d);drips.push(d);}
+
+// ---------- HUD ----------
+const $=id=>document.getElementById(id);
+function setCap(step,txt,sub,o){$('capstep').textContent=step;$('captxt').textContent=txt;$('capsub').textContent=sub;$('cap').style.opacity=o;$('cap').style.transform=`translateX(${(1-o)*-30}px)`;}
+function f1(v){return v.toFixed(1).replace('.',',');}
+function detector(t,o,mode){const d=$('det');d.style.opacity=o;d.style.transform=`scale(${mode==='small'?0.72:1})`;
+  if(o<=0)return;let o2,lie,h2s,co,stat,col,alarm=false;
+  if(mode==='big'){const k=sm(18.5,21.5,t);
+    if(k<0.05){o2=null;}else{o2=lerp(19.4,20.9,k)+0.03*Math.sin(t*5);lie=Math.round(lerp(3,0,k));h2s=Math.round(lerp(2,0,k));co=Math.round(lerp(4,0,k));}
+    stat=k<0.99?'MESURE…':'ATMOSPHÈRE OK';col=k<0.99?'#c7a100':'#2e8b3a';}
+  else{o2=t<52?20.9+0.02*Math.sin(t*4):lerp(20.9,18.6,sm(52,56.5,t))+0.02*Math.sin(t*6);lie=t<53?0:Math.round(lerp(0,4,sm(53,57,t)));h2s=0;co=t<53?0:Math.round(lerp(0,6,sm(53,57,t)));
+    alarm=o2<19.5;stat=alarm?'⚠ ALARME O₂ BAS — ÉVACUER':'ATMOSPHÈRE OK';col=alarm?'#c8102e':'#2e8b3a';}
+  if(o2===null){$('o2').textContent='--,-';$('lie').textContent='--';$('h2s').textContent='--';$('co').textContent='--';}
+  else{$('o2').textContent=f1(o2);$('lie').textContent=lie;$('h2s').textContent=h2s;$('co').textContent=co;}
+  const blink=alarm&&(Math.floor(t*4)%2===0);d.classList.toggle('alarm',blink);
+  $('stat').textContent=stat;$('stat').style.background=col;$('stat').style.color='#fff';
+  $('led').style.background=alarm?(blink?'#ff2a2a':'#4a0a0a'):(Math.floor(t*1.2)%2?'#3cff6a':'#1a4a24');
+  $('led').style.boxShadow=alarm&&blink?'0 0 24px 8px rgba(255,40,40,.8)':'none';}
+
+// ---------- camera path helpers ----------
+function shake(t,a){return new THREE.Vector3(Math.sin(t*1.7)*0.6+Math.sin(t*4.3+1)*0.3+Math.sin(t*9.1)*0.1,Math.sin(t*2.3+2)*0.6+Math.sin(t*5.2)*0.3,Math.sin(t*1.1+4)*0.5).multiplyScalar(a);}
+function look(p,tg,t,a){camera.position.copy(p).add(shake(t,a));camera.lookAt(tg.clone().add(shake(t+10,a*0.6)));}
+const V=(x,y,z)=>new THREE.Vector3(x,y,z);
+function vlerp(a,b,k){return a.clone().lerp(b,k);}
+
+// ---------- timeline ----------
+const T={title:[0,6],s1:[6,17],s2:[17,27],s3:[27,35],s4:[35,45],s5:[45,60],s6:[60,70],end:[70,80]};
+function inS(t,s){return t>=T[s][0]&&t<T[s][1];}
+function local(t,s){return (t-T[s][0])/(T[s][1]-T[s][0]);}
+function fadeAt(t){let f=0;const cuts=[6,17,27,35,45,60,70];for(const c of cuts)f=Math.max(f,1-Math.min(1,Math.abs(t-c)/0.45));
+  f=Math.max(f,1-sm(0,1.2,t),sm(79,80,t));return f;}
+
+window.renderAt=function(t){
+  // defaults
+  let exposure=1.0,vig=0.9,grain=0.045,sat=0.88,tint=[1,1,1];
+  head_l.intensity=0;dustMat.uniforms.intensity.value=0;dustMat.uniforms.flow.value=0;beam.material.uniforms.k.value=0.0;
+  handGroup.forEach(o=>o.visible=false);ent.root.visible=false;$('rec').style.opacity=0;$('title').style.opacity=0;$('end').style.opacity=0;
+  setCap('','','',0);detector(t,0,'big');scene.fog.density=0.035;
+  ceilingLights.forEach(l=>l.visible=true);key.visible=true;hemi.intensity=0.35;shaftLight.intensity=22;
+  setCable(-1.6);
+  blades.rotation.x=t*(t>27?40:0)+0;
+  crank.rotation.x=0;
+
+  if(t<T.title[1]){const k=t/6;look(V(lerp(4.6,3.9,k),lerp(2.6,2.4,k),lerp(4.2,3.6,k)),V(0,0.4,0),t,0.003);exposure=0.55;
+    $('title').style.opacity=sm(0.8,1.8,t)*(1-sm(5.0,5.8,t));sat=0.6;}
+  else if(inS(t,'s1')){const k=local(t,'s1');const e=sm(0,1,k);
+    look(vlerp(V(3.4,1.65,3.6),V(2.0,1.45,2.2),e),vlerp(V(-0.3,0.5,0),V(0,0.3,0),e),t,0.012);
+    const o=sm(0.08,0.18,k)*(1-sm(0.92,1,k));setCap('ÉTAPE 1 · PRÉPARATION','Permis de pénétrer, consignation et balisage de la zone','Trépied et treuil installés au-dessus du trou d\'homme',o);
+    // attendant idle
+    att.root.rotation.y=-2.0+Math.sin(t*0.4)*0.05;}
+  else if(inS(t,'s2')){const k=local(t,'s2');handGroup.forEach(o=>o.visible=true);
+    look(vlerp(V(0.75,1.45,1.25),V(0.62,1.38,1.08),k),vlerp(V(0.1,-0.5,0.05),V(0.05,-0.9,0.0),k),t,0.008);
+    probe.position.set(0.36+Math.sin(t*1.3)*0.005,1.1+Math.sin(t*0.9)*0.008,0.78);
+    const o=sm(0.08,0.16,k)*(1-sm(0.92,1,k));setCap('ÉTAPE 2 · DÉTECTION','Mesure de l\'atmosphère avant l\'entrée','O₂, explosimétrie (LIE), H₂S et CO — en haut, au milieu et au fond',o);
+    detector(t,sm(17.8,18.6,t)*(1-sm(26.2,26.9,t)),'big');}
+  else if(inS(t,'s3')){const k=local(t,'s3');
+    look(vlerp(V(-3.0,0.55,2.6),V(-2.4,0.75,2.2),k),vlerp(V(-1.4,0.35,0.6),V(-0.6,0.15,0.2),k),t,0.01);
+    const o=sm(0.08,0.18,k)*(1-sm(0.9,1,k));setCap('ÉTAPE 3 · VENTILATION','Ventilation mécanique en continu pendant toute l\'intervention','Apport d\'air neuf soufflé au fond de la cuve',o);}
+  else if(inS(t,'s4')){const k=local(t,'s4');const yk=sm(0.05,0.95,k);
+    // POV descending the ladder facing the wall (ladder at -z), looking slightly down/side
+    const y=lerp(0.75,-2.6,yk);const bob=Math.sin(t*6.5)*0.02*Math.sin(Math.PI*yk);
+    const z=y> -1.2? -0.05 : lerp(-0.05,-0.3,sm(-1.2,-2.6,y));
+    const lookDown=sm(0.55,1,k);
+    look(V(0.02,y+bob,z),V(lerp(0.05,-0.5,lookDown),y-lerp(0.95,1.4,lookDown),lerp(1,-0.9,lookDown)),t,0.02);
+    head_l.intensity=lerp(0,9,sm(0.4,-0.2,y));exposure=lerp(1.0,1.25,sm(0.3,-1.2,y));
+    dustMat.uniforms.intensity.value=0.8*sm(-0.5,-1.5,y);beam.material.uniforms.k.value=0.06*sm(-0.3,-1.5,y);
+    setCable(y+0.55);$('rec').style.opacity=1;grain=0.07;scene.fog.density=lerp(0.035,0.12,sm(0,-1.5,y));
+    const o=sm(0.06,0.14,k)*(1-sm(0.9,1,k));setCap('ÉTAPE 4 · ENTRÉE','Descente encordée : harnais relié au treuil du trépied','Le surveillant reste à l\'extérieur, en contact permanent',o);}
+  else if(inS(t,'s5')){const k=local(t,'s5');
+    const pos=V(lerp(0.35,0.1,k),-2.55+Math.sin(t*0.8)*0.02,lerp(0.05,-0.1,k));
+    // scan: walls -> pipe/valve -> floor -> back up towards manhole at alarm
+    let tg;const tt=t-45;
+    if(tt<3.5)tg=vlerp(V(-1.6,-2.8,0.9),V(-1.2,-2.9,-1.4),sm(0,3.5,tt));
+    else if(tt<7)tg=vlerp(V(-1.2,-2.9,-1.4),V(0.3,-2.6,-1.25),sm(3.5,6.5,tt));
+    else if(tt<9.4)tg=vlerp(V(0.3,-2.6,-1.25),V(0.3,-2.45,-1.25),sm(7,9,tt));
+    else tg=vlerp(V(0.3,-2.45,-1.25),V(0.0,1.0,0.1),sm(10,12.5,tt));
+    const alarm=t>54.4;
+    look(pos,tg,t,alarm?0.035:0.016);head_l.intensity=9;exposure=1.25;grain=0.07;sat=0.82;
+    dustMat.uniforms.intensity.value=0.8;dustMat.uniforms.flow.value=0.3;beam.material.uniforms.k.value=0.06;setCable(-1.95);scene.fog.density=0.12;
+    $('rec').style.opacity=1;detector(t,sm(45.6,46.4,t),'small');
+    if(alarm&&Math.floor(t*4)%2===0){tint=[1.25,0.85,0.85];}
+    if(!alarm){const o=sm(0.04,0.1,k)*(1-sm(0.5,0.6,k));setCap('ÉTAPE 5 · INTERVENTION','Détecteur porté en continu, au plus près des voies respiratoires','Vanne consignée et cadenassée avant toute ouverture',o);}
+    else{const o=sm(54.6,55.0,t)*(1-sm(59.4,59.9,t));setCap('ALARME','Oxygène < 19,5 % : arrêt immédiat et évacuation','Ne pas chercher à terminer la tâche',o);}}
+  else if(inS(t,'s6')){const k=local(t,'s6');
+    look(vlerp(V(-2.6,1.6,-2.4),V(-2.2,1.5,-2.0),k),V(0.3,0.7,0.0),t,0.015);
+    ent.root.visible=true;const ey=lerp(-1.75,0.15,sm(0.05,0.8,k));ent.root.position.set(0,ey,0.05);ent.root.rotation.y=Math.PI*0.85;
+    ent.L.sh.rotation.x=-2.7+Math.sin(t*3)*0.25;ent.R.sh.rotation.x=-2.7-Math.sin(t*3)*0.25;
+    setCable(ey+1.45);
+    // attendant at the winch cranking
+    att.root.position.set(legs[2].x+0.35,0,legs[2].z+0.45);att.root.lookAt(wPos.x,0,wPos.z);
+    const cr=t*4.5*(k<0.8?1:0);crank.rotation.x=cr;
+    att.R.sh.rotation.set(-1.0+Math.sin(cr)*0.35,0,-0.25);att.R.el.rotation.x=-0.6+Math.cos(cr)*0.35;att.L.sh.rotation.set(-0.9,0,0.25);att.L.el.rotation.x=-0.8;
+    const o=sm(0.06,0.14,k)*(1-sm(0.9,1,k));setCap('ÉTAPE 6 · ÉVACUATION','Le surveillant remonte l\'intervenant au treuil et alerte les secours','Jamais de descente pour porter secours sans équipement ni formation',o);}
+  else{const k=local(t,'end');look(V(3.0+k*0.3,2.2,3.2),V(0,0.4,0),t,0.003);exposure=0.35;sat=0.4;
+    att.root.position.set(legs[2].x+0.35,0,legs[2].z+0.45);att.root.lookAt(wPos.x,0,wPos.z);ent.root.visible=true;ent.root.position.set(0.9,0,0.9);ent.root.rotation.y=-0.8;
+    ent.L.sh.rotation.set(0.1,0,0.08);ent.R.sh.rotation.set(0.1,0,-0.08);setCable(1.2);
+    $('end').style.opacity=sm(70.6,71.6,t);}
+  if(t>=T.s6[0]&&t<T.s6[1]&&false){}
+  // drips
+  for(const d of drips){const u=d.userData;const ph=((t+u.ph)%u.per)/u.per;d.position.set(u.x,CH_TOP-0.02-ph*ph*(CH_TOP-CH_BOT),u.z);}
+  dustMat.uniforms.camPos.value.copy(camera.position);camera.getWorldDirection(dustMat.uniforms.camDir.value);dustMat.uniforms.time.value=t;
+  const f=fadeAt(t);$('fade').style.opacity=f;
+  const tcs=14*3600+32*60+7+Math.floor(t);$('tc').textContent=`${String(Math.floor(tcs/3600)).padStart(2,'0')}:${String(Math.floor(tcs/60)%60).padStart(2,'0')}:${String(tcs%60).padStart(2,'0')}`;
+  post.uniforms.exposure.value=exposure;post.uniforms.vig.value=vig;post.uniforms.grain.value=grain;post.uniforms.sat.value=sat;post.uniforms.time.value=t;post.uniforms.tint.value.set(...tint);
+  renderer.setRenderTarget(rt);renderer.render(scene,camera);renderer.setRenderTarget(null);renderer.render(postScene,postCam);
+  return true;};
+window.ready=true;
+</script></body></html>
