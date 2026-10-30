@@ -24,6 +24,8 @@ Structure : **1ʳᵉ partie — les mauvais réflexes** (reconstitution d'un acc
 | 1:48–1:58 | Étape 6 · Évacuation | Le surveillant remonte l'intervenant au treuil, alerte les secours |
 | 1:58–2:06 | À retenir | Les 6 règles clés |
 
+Documents du projet : [suivi](SUIVI.md) · [méthode](METHODE.md) · [direction artistique](DA.md)
+
 > Vidéo de sensibilisation : elle ne remplace ni la formation ni les procédures du site.
 
 ## Régénérer la vidéo
