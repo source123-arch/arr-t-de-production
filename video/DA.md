@@ -44,9 +44,10 @@ Brouillard de scène : `#1a1c1e`. Éclairage chaud (`#fff3e0`) pour la lampe fro
 
 ## Son
 
-- Pas de musique : ambiance d'atelier synthétisée (grondement grave, ronflement 50 Hz et harmoniques, machines lointaines).
-- Dans la cuve : même ambiance mais étouffée (filtre passe-bas), pour l'enfermement.
-- Bruitages : pas, échelle métallique, ventilateur, bip du détecteur, alarme.
+- Pas de musique : ambiance d'atelier synthétisée (grondement grave, ronflement 50 Hz et harmoniques, machines lointaines), avec une simple nappe grave sur le titre et la fin.
+- Dans la cuve : même ambiance mais étouffée (filtre passe-bas) et réverbérée, avec des gouttes, pour l'enfermement.
+- Bruitages : pas, échelle métallique, ventilateur, respiration en vue casque, bips et alarme du détecteur, cliquets du treuil.
+- 1ʳᵉ partie : respiration qui s'accélère puis s'arrête, sifflement d'oreilles et son étouffé pendant le malaise, chute, battements de cœur sur le bilan.
 - Fondu de sortie de 1,5 s sur l'image et le son.
 
 ## Ton des textes
