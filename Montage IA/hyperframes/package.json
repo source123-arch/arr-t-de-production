@@ -1,0 +1,8 @@
+{
+  "name": "montage-ia-hyperframes",
+  "scripts": {},
+  "dependencies": {
+    "hyperframes": "^0.9.37"
+  },
+  "private": true
+}
