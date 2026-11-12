@@ -28,9 +28,9 @@ Comment on fabrique une vidéo de sensibilisation dans ce dépôt, de l'idée au
 Commandes complètes : voir `README.md`, section « Régénérer la vidéo ».
 
 ### Remotion (optionnel)
-Le projet `remotion/` permet d'écrire des séquences en React :
+Le projet Remotion, dans `Montage IA/remotion/`, permet d'écrire des séquences en React :
 ```bash
-cd video/remotion
+cd "Montage IA/remotion"
 npm install
 npm run studio   # aperçu interactif
 npm run render   # -> out/titre.mp4

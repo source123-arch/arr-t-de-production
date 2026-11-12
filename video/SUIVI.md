@@ -11,7 +11,7 @@ Vidéo de sensibilisation « Espace confiné — mauvais réflexes, bons réflex
 | Rendu images (`source/render.js`) | ✅ Fait | Chromium headless, 1280×720, 25 i/s |
 | Bande-son (`audio.py`, `audio_bad.py`) | ✅ Fait | Ambiance synthétisée, pas de voix off |
 | Montage final (`assemble.sh`) | ✅ Fait | `espace-confine.mp4`, 2 min 06 |
-| Remotion (`remotion/`) | 🟡 Installé | Composition d'exemple `Titre` seulement |
+| Remotion (`../Montage IA/remotion/`) | 🟡 Installé | Composition d'exemple `Titre` seulement |
 | Voix off | ⬜ À faire | — |
 | Version 1080p | ⬜ À faire | Le master actuel est en 720p |
 | Validation par un préventeur / HSE | ⬜ À faire | Vérifier seuils, vocabulaire, conformité aux procédures du site |
@@ -26,6 +26,7 @@ Légende : ✅ fait · 🟡 en cours · ⬜ à faire · ⛔ bloqué
 | 2026-10-30 | Restructuration : mauvais réflexes puis bons réflexes, ~2 min | `9ca8f67` |
 | 2026-10-30 | Export final `espace-confine.mp4` (2 min 06) | `9424e6b` |
 | 2026-10-30 | Installation de Remotion dans `video/remotion/` | `d8ec701` |
+| 2026-11-12 | Création du dossier `Montage IA/` et déplacement de Remotion dedans | — |
 
 ## Prochaines étapes
 
