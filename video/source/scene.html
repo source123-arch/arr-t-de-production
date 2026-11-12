@@ -147,25 +147,29 @@ function tagTex(){const c=document.createElement('canvas');c.width=256;c.height=
 const renderer=new THREE.WebGLRenderer({antialias:false,preserveDrawingBuffer:true});
 renderer.setSize(W,H);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 document.body.prepend(renderer.domElement);
-const rt=new THREE.WebGLRenderTarget(W,H,{type:THREE.HalfFloatType,samples:4});
+const rt=new THREE.WebGLRenderTarget(W,H,{type:THREE.HalfFloatType,samples:4,depthTexture:new THREE.DepthTexture(W,H)});
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x0b0c0d);
 scene.fog=new THREE.FogExp2(0x1a1c1e,0.035);
 const camera=new THREE.PerspectiveCamera(50,W/H,0.02,120);scene.add(camera);
 
 // post pass
-const post=new THREE.ShaderMaterial({uniforms:{tex:{value:rt.texture},time:{value:0},exposure:{value:1},blur:{value:0},vig:{value:0.9},grain:{value:0.05},ca:{value:0.0015},sat:{value:0.9},tint:{value:new THREE.Vector3(1,1,1)}},
+const post=new THREE.ShaderMaterial({uniforms:{tex:{value:rt.texture},time:{value:0},exposure:{value:1},blur:{value:0},vig:{value:0.9},grain:{value:0.05},ca:{value:0.0015},sat:{value:0.9},tint:{value:new THREE.Vector3(1,1,1)},dTex:{value:rt.depthTexture},near:{value:0.02},far:{value:120},focus:{value:3},aperture:{value:0.5}},
   vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}`,
-  fragmentShader:`uniform sampler2D tex;uniform float time,exposure,vig,grain,ca,sat,blur;uniform vec3 tint;varying vec2 vUv;
+  fragmentShader:`uniform sampler2D tex;uniform float time,exposure,vig,grain,ca,sat,blur,near,far,focus,aperture;uniform vec3 tint;uniform sampler2D dTex;
+  float lin(vec2 uv){float d=texture2D(dTex,uv).x;return (2.0*near*far)/(far+near-(2.0*d-1.0)*(far-near));}
+  float coc(vec2 uv){return clamp(aperture*abs(1.0-focus/lin(uv))*7.0,0.,8.);}varying vec2 vUv;
   vec3 aces(vec3 x){const float a=2.51,b=0.03,c=2.43,d=0.59,e=0.14;return clamp((x*(a*x+b))/(x*(c*x+d)+e),0.,1.);}
   float h(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
   void main(){vec2 d=vUv-.5;float r2=dot(d,d);
     vec3 col;col.r=texture2D(tex,vUv-d*ca*8.*r2*4.).r;col.g=texture2D(tex,vUv).g;col.b=texture2D(tex,vUv+d*ca*8.*r2*4.).b;
+    float c0=coc(vUv);if(c0>0.4){vec3 acc=vec3(0.);float ws=0.;for(int i=0;i<28;i++){float fi=float(i);float r=sqrt((fi+.5)/28.)*c0;float an=fi*2.39996;vec2 uv=vUv+vec2(cos(an),sin(an))*r/vec2(1280.,720.);float w=smoothstep(r-1.5,r+0.5,coc(uv))+0.02;acc+=texture2D(tex,uv).rgb*w;ws+=w;}col=mix(col,acc/ws,smoothstep(0.4,1.4,c0));}
     if(blur>0.){vec3 a=vec3(0.);for(int i=0;i<12;i++){float an=float(i)*0.5236;a+=texture2D(tex,vUv+vec2(cos(an),sin(an))*blur*0.012).rgb+texture2D(tex,vUv+vec2(cos(an+.26),sin(an+.26))*blur*0.03).rgb;}col=mix(col,a/24.,clamp(blur*1.5,0.,1.));}
     // soft bloom-ish glow
     vec3 b=vec3(0.);for(int i=0;i<8;i++){float a=float(i)*0.785;vec2 o=vec2(cos(a),sin(a))*0.006;b+=max(texture2D(tex,vUv+o).rgb-1.2,0.)+max(texture2D(tex,vUv+o*2.5).rgb-1.2,0.);}
     col+=b*0.07;
     col*=exposure*tint;col=aces(col);
     float l=dot(col,vec3(.299,.587,.114));col=mix(vec3(l),col,sat);
+    col+=vec3(-0.012,0.004,0.016)*(1.-smoothstep(0.,0.5,l));col*=mix(vec3(1.),vec3(1.03,1.0,0.96),smoothstep(0.4,1.,l));
     col*=1.-vig*smoothstep(0.08,0.55,r2*1.6);
     col=pow(col,vec3(1./2.2));
     col+=(h(vUv*vec2(1280.,720.)+time*91.7)-.5)*grain;
@@ -338,21 +342,45 @@ const ductM=mesh(new THREE.TubeGeometry(ductCurve,140,0.15,18,false),M.duct);sce
 const goodObjs=scene.children.slice(_g0);
 
 // ---------- workers ----------
-function worker(vestMat,helmetMat){const g=new THREE.Group();const P={};
-  P.legs=[];for(const s of [-1,1]){const lg=new THREE.Group();lg.position.set(s*0.1,0.87,0);const leg=mesh(new THREE.CapsuleGeometry(0.075,0.62,6,12),M.navy);leg.position.y=-0.39;lg.add(leg);
-    const boot=mesh(new THREE.BoxGeometry(0.12,0.1,0.26),M.black);boot.position.set(0,-0.82,0.04);lg.add(boot);g.add(lg);P.legs.push(lg);}
-  const hips=mesh(new THREE.CapsuleGeometry(0.15,0.08,6,14),M.navy);hips.scale.z=0.7;hips.position.y=0.9;g.add(hips);
-  const torso=mesh(new THREE.CapsuleGeometry(0.17,0.38,8,16),vestMat);torso.scale.z=0.68;torso.position.y=1.2;g.add(torso);
-  for(const y of [1.05,1.22]){const st=mesh(new THREE.CylinderGeometry(0.176,0.176,0.035,20,1,true),M.refl);st.scale.z=0.69;st.position.y=y;g.add(st);}
-  const neck=cyl(0.05,0.05,0.08,M.skin,10);neck.position.y=1.5;g.add(neck);
-  const headM=mesh(new THREE.SphereGeometry(0.105,20,16),M.skin);headM.scale.set(0.95,1.1,1);headM.position.y=1.62;g.add(headM);
-  const helm=mesh(new THREE.SphereGeometry(0.125,20,12,0,Math.PI*2,0,Math.PI/2),helmetMat);helm.position.y=1.66;g.add(helm);
-  const brim=cyl(0.14,0.14,0.012,helmetMat,20);brim.scale.z=1.15;brim.position.set(0,1.665,0.02);g.add(brim);
-  for(const s of [-1,1]){const sh=new THREE.Group();sh.position.set(s*0.23,1.4,0);
-    const up=mesh(new THREE.CapsuleGeometry(0.055,0.24,6,10),vestMat===M.vest?M.navy:M.navy);up.position.y=-0.16;sh.add(up);
-    const el=new THREE.Group();el.position.y=-0.32;const fo=mesh(new THREE.CapsuleGeometry(0.048,0.22,6,10),M.navy);fo.position.y=-0.14;el.add(fo);
-    const gl=mesh(new THREE.SphereGeometry(0.055,10,8),M.glove);gl.position.y=-0.3;el.add(gl);sh.add(el);g.add(sh);P[s<0?'L':'R']={sh,el};}
+const fabric=canvasTex(128,(d,s)=>{for(let y=0;y<s;y++)for(let x=0;x<s;x++){const l=0.5+0.22*Math.sin(x*1.7)*Math.sin(y*1.7)+0.3*(nz(x*0.7+90,y*0.7)-0.5);const i=(y*s+x)*4;d[i]=d[i+1]=d[i+2]=255*l;d[i+3]=255;}},8,8);
+function cloth(color,em){return new THREE.MeshStandardMaterial({color,roughness:0.92,bumpMap:fabric.t,bumpScale:0.5,emissive:em||0});}
+const skinM=new THREE.MeshStandardMaterial({color:0xb98468,roughness:0.55});
+const glassM=new THREE.MeshStandardMaterial({color:0x223038,roughness:0.05,metalness:0.6,transparent:true,opacity:0.75});
+const lv=a=>a.map(([r,y])=>new THREE.Vector2(r,y));
+function worker(vestMat,helmetMat){const g=new THREE.Group();const P={};const navyC=cloth(0x253142);
+  vestMat.bumpMap=fabric.t;vestMat.bumpScale=0.5;
+  const torso=mesh(new THREE.LatheGeometry(lv([[0.001,0.86],[0.14,0.87],[0.155,0.95],[0.15,1.05],[0.165,1.2],[0.19,1.34],[0.185,1.40],[0.12,1.46],[0.055,1.49],[0.001,1.5]]),24),navyC);torso.scale.z=0.62;g.add(torso);
+  const vest=mesh(new THREE.LatheGeometry(lv([[0.158,0.98],[0.158,1.05],[0.172,1.2],[0.197,1.34],[0.192,1.41],[0.132,1.455]]),24),vestMat);vest.scale.z=0.64;g.add(vest);
+  for(const [y,r] of [[1.08,0.163],[1.22,0.178]]){const st=mesh(new THREE.CylinderGeometry(r+0.004,r+0.004,0.032,24,1,true),M.refl);st.scale.z=0.645;st.position.y=y;g.add(st);}
+  const belt=mesh(new THREE.CylinderGeometry(0.157,0.157,0.04,24,1,true),M.black);belt.scale.z=0.63;belt.position.y=0.95;g.add(belt);
+  const buckle=mesh(new THREE.BoxGeometry(0.05,0.035,0.01),M.steel);buckle.position.set(0,0.95,0.1);g.add(buckle);
+  P.legs=[];P.knees=[];
+  for(const s of [-1,1]){const hip=new THREE.Group();hip.position.set(s*0.085,0.91,0);
+    const th=mesh(new THREE.CapsuleGeometry(0.074,0.3,6,12),navyC);th.position.y=-0.2;hip.add(th);
+    const knee=new THREE.Group();knee.position.y=-0.42;const sh=mesh(new THREE.CapsuleGeometry(0.058,0.3,6,12),navyC);sh.position.y=-0.2;knee.add(sh);
+    const boot=mesh(new THREE.CapsuleGeometry(0.056,0.16,6,12),M.black);boot.rotation.x=Math.PI/2;boot.scale.x=1.12;boot.position.set(0,-0.43,0.05);knee.add(boot);
+    const sole=mesh(new THREE.BoxGeometry(0.12,0.025,0.29),new THREE.MeshStandardMaterial({color:0x0c0c0c,roughness:0.95}));sole.position.set(0,-0.475,0.05);knee.add(sole);
+    hip.add(knee);g.add(hip);P.legs.push(hip);P.knees.push(knee);}
+  const neck=cyl(0.048,0.052,0.09,skinM,12);neck.position.y=1.52;g.add(neck);
+  const head=mesh(new THREE.SphereGeometry(0.1,24,18),skinM);head.scale.set(0.88,1.08,0.98);head.position.y=1.635;g.add(head);
+  const jaw=mesh(new THREE.SphereGeometry(0.075,16,12),skinM);jaw.scale.set(1,0.8,1);jaw.position.set(0,1.585,0.025);g.add(jaw);
+  const nose=mesh(new THREE.ConeGeometry(0.016,0.04,8),skinM);nose.rotation.x=Math.PI/2;nose.position.set(0,1.628,0.1);g.add(nose);
+  for(const s of [-1,1]){const e=mesh(new THREE.SphereGeometry(0.022,8,8),skinM);e.scale.set(0.5,1,0.8);e.position.set(s*0.088,1.635,0);g.add(e);}
+  const glasses=mesh(new THREE.BoxGeometry(0.15,0.036,0.012),glassM);glasses.position.set(0,1.655,0.094);g.add(glasses);
+  const helm=mesh(new THREE.SphereGeometry(0.122,24,14,0,Math.PI*2,0,Math.PI/2),helmetMat);helm.scale.set(1,0.85,1.12);helm.position.y=1.675;g.add(helm);
+  const peak=mesh(new THREE.BoxGeometry(0.17,0.012,0.07),helmetMat);peak.position.set(0,1.682,0.15);peak.rotation.x=0.18;g.add(peak);
+  const ridge=mesh(new THREE.BoxGeometry(0.022,0.02,0.24),helmetMat);ridge.position.set(0,1.776,0);g.add(ridge);
+  const rim=mesh(new THREE.CylinderGeometry(0.124,0.124,0.012,24,1,true),helmetMat);rim.scale.z=1.12;rim.position.y=1.678;g.add(rim);
+  for(const s of [-1,1]){const sh=new THREE.Group();sh.position.set(s*0.2,1.4,0);
+    const ball=mesh(new THREE.SphereGeometry(0.068,12,10),vestMat);ball.scale.z=0.85;sh.add(ball);
+    const up=mesh(new THREE.CapsuleGeometry(0.052,0.22,6,10),navyC);up.position.y=-0.15;sh.add(up);
+    const el=new THREE.Group();el.position.y=-0.3;const fo=mesh(new THREE.CapsuleGeometry(0.045,0.2,6,10),navyC);fo.position.y=-0.13;el.add(fo);
+    const hand=mesh(new THREE.BoxGeometry(0.062,0.09,0.036),M.glove);hand.position.y=-0.3;el.add(hand);
+    const cuff=mesh(new THREE.CylinderGeometry(0.047,0.047,0.04,10),M.glove);cuff.position.y=-0.25;el.add(cuff);
+    const thumb=mesh(new THREE.CapsuleGeometry(0.014,0.03,4,6),M.glove);thumb.position.set(-s*0.0,-0.29,0.03);thumb.rotation.x=0.5;el.add(thumb);
+    sh.add(el);g.add(sh);P[s<0?'L':'R']={sh,el};}
   P.root=g;return P;}
+
 const att=worker(M.vest,M.helmetW);att.root.position.set(1.45,0,-0.75);att.root.rotation.y=-2.0;scene.add(att.root);
 // rest pose
 att.L.sh.rotation.set(0.1,0,0.08);att.R.sh.rotation.set(0.1,0,-0.08);att.L.el.rotation.x=-0.3;att.R.el.rotation.x=-0.3;
@@ -361,8 +389,8 @@ const radio=mesh(new THREE.BoxGeometry(0.06,0.14,0.035),M.black);radio.position.
 // entrant (harnessed)
 const ent=worker(M.vestY,M.helmetY);scene.add(ent.root);
 const _h0=ent.root.children.length;
-for(const y of [1.1,0.92]){const h=mesh(new THREE.CylinderGeometry(0.18,0.18,0.04,20,1,true),M.strap);h.scale.z=0.7;h.position.y=y;ent.root.add(h);}
-for(const s of [-1,1]){const st=mesh(new THREE.BoxGeometry(0.04,0.42,0.01),M.strap);st.position.set(s*0.08,1.25,0.12);st.rotation.z=s*0.15;ent.root.add(st);}
+for(const [y,r] of [[1.12,0.172],[0.93,0.165]]){const h=mesh(new THREE.CylinderGeometry(r,r,0.04,24,1,true),M.strap);h.scale.z=0.66;h.position.y=y;ent.root.add(h);}
+for(const s of [-1,1]){const st=mesh(new THREE.BoxGeometry(0.04,0.42,0.01),M.strap);st.position.set(s*0.08,1.25,0.122);st.rotation.z=s*0.15;ent.root.add(st);}
 const dring=mesh(new THREE.TorusGeometry(0.03,0.008,6,12),M.steel);dring.position.set(0,1.42,-0.12);ent.root.add(dring);const harnessObjs=ent.root.children.slice(_h0);
 const headlamp=mesh(new THREE.BoxGeometry(0.06,0.04,0.04),M.black);headlamp.position.set(0,1.69,0.12);ent.root.add(headlamp);
 const lampFace=mesh(new THREE.CircleGeometry(0.015,12),M.lampE);lampFace.position.set(0,1.69,0.141);ent.root.add(lampFace);
@@ -424,7 +452,7 @@ function detector(t,o,mode){const d=$('det');d.style.opacity=o;d.style.transform
 
 // ---------- camera path helpers ----------
 function shake(t,a){return new THREE.Vector3(Math.sin(t*1.7)*0.6+Math.sin(t*4.3+1)*0.3+Math.sin(t*9.1)*0.1,Math.sin(t*2.3+2)*0.6+Math.sin(t*5.2)*0.3,Math.sin(t*1.1+4)*0.5).multiplyScalar(a);}
-function look(p,tg,t,a){camera.position.copy(p).add(shake(t,a));camera.lookAt(tg.clone().add(shake(t+10,a*0.6)));}
+let FOCUS=3;function look(p,tg,t,a){FOCUS=p.distanceTo(tg);camera.position.copy(p).add(shake(t,a));camera.lookAt(tg.clone().add(shake(t+10,a*0.6)));}
 const V=(x,y,z)=>new THREE.Vector3(x,y,z);
 function vlerp(a,b,k){return a.clone().lerp(b,k);}
 
@@ -507,77 +535,151 @@ window.renderAt=function(t){
   dustMat.uniforms.camPos.value.copy(camera.position);camera.getWorldDirection(dustMat.uniforms.camDir.value);dustMat.uniforms.time.value=t;
   const f=fadeAt(t);$('fade').style.opacity=f;
   const tcs=14*3600+32*60+7+Math.floor(t);$('tc').textContent=`${String(Math.floor(tcs/3600)).padStart(2,'0')}:${String(Math.floor(tcs/60)%60).padStart(2,'0')}:${String(tcs%60).padStart(2,'0')}`;
-  post.uniforms.exposure.value=exposure;post.uniforms.vig.value=vig;post.uniforms.grain.value=grain;post.uniforms.sat.value=sat;post.uniforms.time.value=t;post.uniforms.tint.value.set(...tint);
+  post.uniforms.focus.value=FOCUS;post.uniforms.aperture.value=APER;post.uniforms.exposure.value=exposure;post.uniforms.vig.value=vig;post.uniforms.grain.value=grain;post.uniforms.sat.value=sat;post.uniforms.time.value=t;post.uniforms.tint.value.set(...tint);
   renderer.setRenderTarget(rt);renderer.render(scene,camera);renderer.setRenderTarget(null);renderer.render(postScene,postCam);
   return true;};
+let APER=0.5;
 function blurU(v){post.uniforms.blur.value=v;}
 function inter(k,h,sub,c,o){$('interk').textContent=k;$('interk').style.color=c;$('interh').textContent=h;$('inters').textContent=sub;$('interb').style.background=c;$('inter').style.opacity=o;}
-function resetPose(P){P.legs.forEach(l=>l.rotation.set(0,0,0));P.L.sh.rotation.set(0.1,0,0.08);P.R.sh.rotation.set(0.1,0,-0.08);P.L.el.rotation.x=-0.3;P.R.el.rotation.x=-0.3;P.root.rotation.order='XYZ';P.root.rotation.set(0,0,0);}
-function walk(P,ph,amp){P.legs[0].rotation.x=Math.sin(ph)*amp;P.legs[1].rotation.x=-Math.sin(ph)*amp;P.L.sh.rotation.x=-Math.sin(ph)*amp*0.8;P.R.sh.rotation.x=Math.sin(ph)*amp*0.8;P.L.el.rotation.x=-0.5;P.R.el.rotation.x=-0.5;}
-function climb(P,t){const ph=t*4;P.legs[0].rotation.x=-0.3-0.5*Math.max(0,Math.sin(ph));P.legs[1].rotation.x=-0.3-0.5*Math.max(0,-Math.sin(ph));
+function resetPose(P){P.legs.forEach(l=>l.rotation.set(0,0,0));P.knees.forEach(k=>k.rotation.set(0,0,0));P.L.sh.rotation.set(0.1,0,0.08);P.R.sh.rotation.set(0.1,0,-0.08);P.L.el.rotation.x=-0.3;P.R.el.rotation.x=-0.3;P.root.rotation.order='XYZ';P.root.rotation.set(0,0,0);}
+function walk(P,ph,amp){P.legs[0].rotation.x=Math.sin(ph)*amp;P.legs[1].rotation.x=-Math.sin(ph)*amp;
+  P.knees[0].rotation.x=Math.max(0,-Math.cos(ph))*amp*1.4;P.knees[1].rotation.x=Math.max(0,Math.cos(ph))*amp*1.4;
+  P.L.sh.rotation.x=-Math.sin(ph)*amp*0.8;P.R.sh.rotation.x=Math.sin(ph)*amp*0.8;P.L.el.rotation.x=-0.5;P.R.el.rotation.x=-0.5;}
+function climb(P,t){const ph=t*4;const a=Math.max(0,Math.sin(ph)),b=Math.max(0,-Math.sin(ph));
+  P.legs[0].rotation.x=-0.25-0.7*a;P.legs[1].rotation.x=-0.25-0.7*b;P.knees[0].rotation.x=0.3+1.1*a;P.knees[1].rotation.x=0.3+1.1*b;
   P.L.sh.rotation.set(-2.5+0.3*Math.sin(ph),0,0.15);P.R.sh.rotation.set(-2.5-0.3*Math.sin(ph),0,-0.15);P.L.el.rotation.x=-0.4;P.R.el.rotation.x=-0.4;}
-function fadeBad(t){let f=0;for(const c of [5,8,16,23,33,41,51])f=Math.max(f,1-Math.min(1,Math.abs(t-c)/0.45));return Math.max(f,1-sm(0,1.2,t),sm(53.4,54,t));}
+function victimPose(){ent.root.visible=true;ent.root.rotation.order='YXZ';ent.root.rotation.set(-Math.PI/2,1.2,0);ent.root.position.set(0.55,CH_BOT+0.17,-0.25);
+  ent.L.sh.rotation.set(-2.6,0,0.5);ent.R.sh.rotation.set(-0.3,0,-0.6);ent.knees[0].rotation.x=0.5;ent.legs[0].rotation.x=-0.3;lampDown.intensity=5;}
+function rescuerPose(){att.root.visible=true;att.root.rotation.order='YXZ';att.root.rotation.set(-Math.PI/2,1.4,0.5);att.root.position.set(0.7,CH_BOT+0.17,0.45);
+  att.L.sh.rotation.set(-1.4,0,0.7);att.R.sh.rotation.set(0.2,0,-0.4);att.knees[1].rotation.x=0.9;att.legs[1].rotation.x=-0.6;}
+function fadeBad(t){let f=0;for(const c of [5,8,17,24,31,43,47,51,56,60])f=Math.max(f,1-Math.min(1,Math.abs(t-c)/0.45));return Math.max(f,1-sm(0,1.2,t),sm(69.4,70,t));}
 const RED='#c8102e';
-window.renderBad=function(t){
-  setGood(false);camera.up.set(0,1,0);camera.clearViewOffset();
-  let exposure=1.0,grain=0.045,sat=0.85,tint=[1,1,1],blur=0;
+function common(){setGood(false);camera.up.set(0,1,0);camera.clearViewOffset();
   head_l.intensity=0;lampDown.intensity=0;dustMat.uniforms.intensity.value=0;dustMat.uniforms.flow.value=0;beam.material.uniforms.k.value=0;
-  handGroup.forEach(o=>o.visible=false);ent.root.visible=false;att.root.visible=false;resetPose(ent);resetPose(att);
+  handGroup.forEach(o=>o.visible=false);ent.root.visible=false;att.root.visible=false;resetPose(ent);resetPose(att);permitG.visible=false;
   for(const i of ['rec','title','end','inter','bilan'])$(i).style.opacity=0;
-  setCap('','','',0);detector(t,0,'big');scene.fog.density=0.035;shaftLight.intensity=22;
-  setCable(-1);cableDown.visible=false;blades.rotation.x=0;
-  if(t<5){look(V(4.2,2.5,3.9),V(0,0.4,0),t,0.003);exposure=0.5;sat=0.6;$('title').style.opacity=sm(0.6,1.6,t)*(1-sm(4.2,4.9,t));}
-  else if(t<8){look(V(3.6,1.8,3.4),V(0,0.3,0),t,0.004);exposure=0.5;sat=0.5;
-    inter('1ʳᵉ PARTIE','Les mauvais réflexes','Reconstitution d\'un accident',RED,sm(5.3,6,t)*(1-sm(7.3,7.9,t)));}
-  else if(t<16){const k=(t-8)/8;
-    look(vlerp(V(3.4,1.65,3.6),V(2.6,1.5,2.8),sm(0,1,k)),V(0.2,0.6,0.0),t,0.012);
-    ent.root.visible=true;const p0=V(2.4,0,-1.8),p1=V(0.05,0,-0.6);const wk=sm(0.05,0.72,k);
-    ent.root.position.copy(vlerp(p0,p1,wk));const yaw=Math.atan2(p1.x-p0.x,p1.z-p0.z);
-    ent.root.rotation.y=lerp(yaw,0,sm(0.74,0.86,k));
-    if(wk>0.001&&wk<0.999){walk(ent,t*7,0.45);ent.root.position.y=Math.abs(Math.sin(t*7))*0.025;}
-    setCap('✗ ERREUR','Intervention « rapide » : ni permis, ni balisage','Aucune analyse des risques, aucune consignation',sm(0.06,0.14,k)*(1-sm(0.9,1,k)),RED);}
-  else if(t<23){const k=(t-16)/7;
-    look(vlerp(V(-2.0,0.8,-1.8),V(-1.7,0.65,-1.5),k),V(0,lerp(0.7,-0.1,k),0.1),t,0.012);
-    ent.root.visible=true;const d=sm(0.1,0.95,k);
-    ent.root.position.set(0.02,lerp(0.06,-1.9,d),lerp(-0.6,0.02,sm(0.04,0.2,k)));climb(ent,t);
-    setCap('✗ ERREUR','Descente seul, sans harnais ni détecteur de gaz','Pas de ventilation, personne pour surveiller à l\'extérieur',sm(0.06,0.14,k)*(1-sm(0.9,1,k)),RED);}
-  else if(t<33){const tt=t-23;const fall=sm(30.4,31.4,t);
-    const pos=V(lerp(0.3,0.15,sm(23,30,t)),lerp(-2.55,-3.95,fall*fall)+Math.sin(t*0.8)*0.02,lerp(0.0,-0.1,tt/10));
-    let tg=tt<4?vlerp(V(-1.6,-2.8,0.9),V(-1.0,-2.9,-1.4),sm(0,4,tt)):vlerp(V(-1.0,-2.9,-1.4),V(0.3,-2.7,-1.25),sm(4,7,tt));
-    tg=vlerp(tg,V(-1.4,-4.1,-0.9),fall);
-    const sway=sm(27,30.4,t);const roll=sway*0.15*Math.sin(t*1.7)+fall*1.3;
-    camera.up.set(Math.sin(roll),Math.cos(roll),0);
-    look(pos,tg,t,0.016+sway*0.03);
-    head_l.intensity=9;exposure=1.25*(1-0.5*sm(28,31,t))*(1-sm(31.6,32.8,t));grain=0.07+sway*0.05;sat=0.82-0.55*sway;
-    blur=sm(27.5,30.4,t)*(0.65+0.35*Math.sin(t*3.1))+fall*0.5;
-    dustMat.uniforms.intensity.value=0.8;beam.material.uniforms.k.value=0.06;scene.fog.density=0.12;$('rec').style.opacity=1-sm(31.5,32.5,t);
-    setCap('✗ DANGER INVISIBLE','Atmosphère appauvrie en oxygène : inodore, incolore','Sans détecteur, aucune alarme ne prévient l\'intervenant',sm(23.5,24,t)*(1-sm(26.8,27.3,t)),RED);
-    if(t>27.3)setCap('MALAISE','Vertiges, confusion… perte de connaissance en quelques respirations','',sm(27.6,28.1,t)*(1-sm(30.6,31.1,t)),RED);}
-  else if(t<41){const k=(t-33)/8;
-    look(vlerp(V(2.9,1.5,2.6),V(2.3,1.3,2.0),k),V(0,0.5,-0.2),t,0.014);
-    att.root.visible=true;const p0=V(-3.2,0,-2.8),p1=V(-0.02,0,-0.6);
-    if(k<0.5){const wk=sm(0,0.45,k);att.root.position.copy(vlerp(p0,p1,wk));att.root.rotation.y=lerp(Math.atan2(p1.x-p0.x,p1.z-p0.z),0,sm(0.4,0.5,k));
-      if(wk<0.999){walk(att,t*11,0.7);att.root.position.y=Math.abs(Math.sin(t*11))*0.05;}}
-    else{const d=sm(0.55,0.97,k);att.root.position.set(0.0,lerp(0.06,-1.9,d),lerp(-0.6,0.02,sm(0.5,0.6,k)));climb(att,t);}
-    setCap('✗ ERREUR FATALE','Un collègue descend lui porter secours… sans protection','Il est exposé à la même atmosphère',sm(0.06,0.14,k)*(1-sm(0.9,1,k)),RED);}
-  else if(t<51){const k=(t-41)/10;
-    camera.setViewOffset(W,H,-260,0,W,H);
-    look(vlerp(V(1.3,-1.75,1.25),V(1.15,-1.9,1.1),k),V(-0.15,-4.1,-0.1),t,0.004);head_l.intensity=0;
-    ent.root.visible=att.root.visible=true;
-    ent.root.rotation.order='YXZ';ent.root.rotation.set(-Math.PI/2,1.2,0);ent.root.position.set(0.55,CH_BOT+0.17,-0.25);
-    att.root.rotation.order='YXZ';att.root.rotation.set(-Math.PI/2,1.4,0.5);att.root.position.set(0.7,CH_BOT+0.17,0.45);
-    ent.L.sh.rotation.set(-2.6,0,0.5);ent.R.sh.rotation.set(-0.3,0,-0.6);att.L.sh.rotation.set(-1.4,0,0.7);att.R.sh.rotation.set(0.2,0,-0.4);
-    lampDown.intensity=5;exposure=1.6;sat=0.55;grain=0.06;scene.fog.density=0.06;
-    $('bilan').style.opacity=sm(42,43,t)*(1-sm(50.2,50.9,t));}
-  else{setGood(true);look(V(3.6,1.8,3.4),V(0,0.3,0),t,0.004);exposure=0.5;sat=0.6;
-    inter('2ᵉ PARTIE','Les bons réflexes','La même intervention, réalisée en sécurité','#3fae4f',sm(51.3,52,t)*(1-sm(53.2,53.8,t)));}
+  setCap('','','',0);detector(0,0,'big');scene.fog.density=0.035;shaftLight.intensity=22;
+  setCable(-1);cableDown.visible=false;blades.rotation.x=0;APER=0.5;}
+function finish(t,o){
   for(const d of drips){const u=d.userData;const ph=((t+u.ph)%u.per)/u.per;d.position.set(u.x,CH_TOP-0.02-ph*ph*(CH_TOP-CH_BOT),u.z);}
   dustMat.uniforms.camPos.value.copy(camera.position);camera.getWorldDirection(dustMat.uniforms.camDir.value);dustMat.uniforms.time.value=t;
-  $('fade').style.opacity=fadeBad(t);
-  const tcs=14*3600+12*60+40+Math.floor(t);$('tc').textContent=`${String(Math.floor(tcs/3600)).padStart(2,'0')}:${String(Math.floor(tcs/60)%60).padStart(2,'0')}:${String(tcs%60).padStart(2,'0')}`;
-  post.uniforms.exposure.value=exposure;post.uniforms.grain.value=grain;post.uniforms.sat.value=sat;post.uniforms.time.value=t;post.uniforms.tint.value.set(...tint);blurU(blur);
-  renderer.setRenderTarget(rt);renderer.render(scene,camera);renderer.setRenderTarget(null);renderer.render(postScene,postCam);
+  $('fade').style.opacity=o.fade;
+  const tcs=o.tc0+Math.floor(t);$('tc').textContent=`${String(Math.floor(tcs/3600)).padStart(2,'0')}:${String(Math.floor(tcs/60)%60).padStart(2,'0')}:${String(tcs%60).padStart(2,'0')}`;
+  post.uniforms.focus.value=FOCUS;post.uniforms.aperture.value=APER;
+  post.uniforms.exposure.value=o.exposure;post.uniforms.grain.value=o.grain;post.uniforms.sat.value=o.sat;post.uniforms.time.value=t;post.uniforms.tint.value.set(...o.tint);blurU(o.blur);
+  renderer.setRenderTarget(rt);renderer.render(scene,camera);renderer.setRenderTarget(null);renderer.render(postScene,postCam);}
+
+window.renderBad=function(t){common();
+  let exposure=1.0,grain=0.045,sat=0.85,tint=[1,1,1],blur=0;
+  if(t<5){look(V(4.2,2.5,3.9),V(0,0.4,0),t,0.003);exposure=0.5;sat=0.6;APER=1.0;$('title').style.opacity=sm(0.6,1.6,t)*(1-sm(4.2,4.9,t));}
+  else if(t<8){look(V(3.6,1.8,3.4),V(0,0.3,0),t,0.004);exposure=0.5;sat=0.5;APER=1.2;
+    inter('1ʳᵉ PARTIE','Les mauvais réflexes','Reconstitution d\'un accident',RED,sm(5.3,6,t)*(1-sm(7.3,7.9,t)));}
+  else if(t<17){const k=(t-8)/9;
+    ent.root.visible=true;const p0=V(2.6,0,-2.0),p1=V(0.05,0,-0.6);const wk=sm(0.03,0.72,k);
+    ent.root.position.copy(vlerp(p0,p1,wk));const yaw=Math.atan2(p1.x-p0.x,p1.z-p0.z);
+    ent.root.rotation.y=lerp(yaw,0,sm(0.74,0.86,k));
+    if(wk>0.001&&wk<0.999){walk(ent,t*6.5,0.42);ent.root.position.y=Math.abs(Math.sin(t*6.5))*0.02;}
+    look(vlerp(V(3.4,1.6,3.6),V(2.6,1.5,2.8),sm(0,1,k)),ent.root.position.clone().add(V(0,1.0,0)),t,0.012);APER=0.7;
+    setCap('✗ ERREUR','Intervention « rapide » : ni permis, ni balisage','Aucune analyse des risques, aucune consignation',sm(0.06,0.14,k)*(1-sm(0.9,1,k)),RED);}
+  else if(t<24){const k=(t-17)/7;
+    look(V(0.05,lerp(1.05,0.8,sm(0,1,k)),-0.78),V(0.02,-2.6,0.05),t,0.01);APER=0.5;head_l.intensity=lerp(0,7,sm(0.3,0.5,k));
+    dustMat.uniforms.intensity.value=0.5;$('rec').style.opacity=1;grain=0.06;
+    setCap('✗ « ÇA NE SENT RIEN, ÇA IRA »','Le manque d\'oxygène est inodore et invisible','L\'odorat ne protège de rien',sm(0.08,0.16,k)*(1-sm(0.9,1,k)),RED);}
+  else if(t<31){const k=(t-24)/7;
+    ent.root.visible=true;const d=sm(0.1,0.95,k);
+    ent.root.position.set(0.02,lerp(0.06,-1.9,d),lerp(-0.6,0.02,sm(0.04,0.2,k)));climb(ent,t);
+    look(vlerp(V(-2.0,0.8,-1.8),V(-1.7,0.65,-1.5),k),V(0,lerp(0.9,0.1,k),0.1),t,0.012);APER=0.8;
+    setCap('✗ ERREUR','Descente seul, sans harnais ni détecteur de gaz','Pas de ventilation, personne pour surveiller à l\'extérieur',sm(0.06,0.14,k)*(1-sm(0.9,1,k)),RED);}
+  else if(t<43){const u=23+(t-31)*10/12;const tt=u-23;const fall=sm(30.4,31.4,u);
+    const pos=V(lerp(0.3,0.15,sm(23,30,u)),lerp(-2.55,-3.95,fall*fall)+Math.sin(u*0.8)*0.02,lerp(0.0,-0.1,tt/10));
+    let tg=tt<4?vlerp(V(-1.6,-2.8,0.9),V(-1.0,-2.9,-1.4),sm(0,4,tt)):vlerp(V(-1.0,-2.9,-1.4),V(0.3,-2.7,-1.25),sm(4,7,tt));
+    tg=vlerp(tg,V(-1.4,-4.1,-0.9),fall);
+    const sway=sm(27,30.4,u);const roll=sway*0.15*Math.sin(u*1.7)+fall*1.3;
+    camera.up.set(Math.sin(roll),Math.cos(roll),0);
+    look(pos,tg,u,0.016+sway*0.03);APER=0.35;
+    head_l.intensity=9;exposure=1.25*(1-0.5*sm(28,31,u))*(1-sm(31.6,32.8,u));grain=0.07+sway*0.05;sat=0.82-0.55*sway;
+    blur=sm(27.5,30.4,u)*(0.65+0.35*Math.sin(u*3.1))+fall*0.5;
+    dustMat.uniforms.intensity.value=0.8;beam.material.uniforms.k.value=0.06;scene.fog.density=0.12;$('rec').style.opacity=1-sm(31.5,32.5,u);
+    setCap('✗ DANGER INVISIBLE','Atmosphère appauvrie en oxygène : inodore, incolore','Sans détecteur, aucune alarme ne prévient l\'intervenant',sm(23.5,24,u)*(1-sm(26.8,27.3,u)),RED);
+    if(u>27.3)setCap('MALAISE','Vertiges, confusion… perte de connaissance en quelques respirations','',sm(27.6,28.1,u)*(1-sm(30.6,31.1,u)),RED);}
+  else if(t<47){const k=(t-43)/4;
+    att.root.visible=true;const p0=V(-3.4,0,-3.0),p1=V(-0.02,0,-0.62);const wk=sm(0,0.9,k);
+    att.root.position.copy(vlerp(p0,p1,wk));att.root.rotation.y=lerp(Math.atan2(p1.x-p0.x,p1.z-p0.z),0,sm(0.85,1,k));
+    if(wk<0.999){walk(att,t*10,0.65);att.root.position.y=Math.abs(Math.sin(t*10))*0.04;}
+    look(vlerp(V(2.9,1.5,2.6),V(2.5,1.4,2.2),k),att.root.position.clone().add(V(0,1.0,0)),t,0.014);APER=0.7;
+    setCap('✗ ERREUR FATALE','Un collègue remarque son absence et accourt','Il n\'a ni détecteur, ni harnais, ni appareil respiratoire',sm(0.08,0.18,k)*(1-sm(0.9,1,k)),RED);}
+  else if(t<51){const k=(t-47)/4;victimPose();
+    look(V(0.03,lerp(1.05,0.85,k),-0.5),V(-0.15,-4.1,-0.05),t,0.012);APER=0.25;exposure=1.2;
+    setCap('✗ ERREUR FATALE','Il appelle — pas de réponse — et décide de descendre','Réflexe humain… mais mortel sans protection',sm(0.1,0.2,k)*(1-sm(0.9,1,k)),RED);}
+  else if(t<56){const k=(t-51)/5;
+    att.root.visible=true;const d=sm(0.08,0.95,k);att.root.position.set(0.0,lerp(0.06,-1.9,d),lerp(-0.6,0.02,sm(0.02,0.15,k)));climb(att,t);
+    look(vlerp(V(2.9,1.4,2.5),V(2.4,1.2,2.0),k),V(0,lerp(1.0,0.0,k),-0.1),t,0.014);APER=0.7;
+    setCap('✗ ERREUR FATALE','Le sauveteur descend sans protection','Il entre dans la même atmosphère',sm(0.08,0.16,k)*(1-sm(0.9,1,k)),RED);}
+  else if(t<60){const k=(t-56)/4;victimPose();
+    const y=lerp(0.4,-1.15,sm(0,0.75,k));const roll=sm(0.45,0.85,k)*0.6*Math.sin(t*2);camera.up.set(Math.sin(roll),Math.cos(roll),0);
+    look(V(0.02,y+Math.sin(t*6.5)*0.02,-0.05),V(0.05,y-0.95,1),t,0.02+0.03*sm(0.4,0.8,k));APER=0.3;
+    blur=sm(0.35,0.8,k)*(0.7+0.3*Math.sin(t*3.3));exposure=lerp(1,0.0,sm(0.6,0.95,k));sat=0.8-0.5*sm(0.3,0.8,k);grain=0.08;
+    setCap('','Quelques respirations suffisent : il s\'effondre à son tour','',sm(0.15,0.28,k)*(1-sm(0.82,0.92,k)),RED);}
+  else{const k=(t-60)/10;
+    camera.setViewOffset(W,H,-260,0,W,H);
+    look(vlerp(V(1.3,-1.75,1.25),V(1.15,-1.9,1.1),k),V(-0.15,-4.1,-0.1),t,0.004);APER=0.4;
+    victimPose();rescuerPose();exposure=1.6;sat=0.55;grain=0.06;scene.fog.density=0.06;
+    $('bilan').style.opacity=sm(61,62,t)*(1-sm(69,69.6,t));}
+  finish(t,{fade:fadeBad(t),tc0:14*3600+12*60+40,exposure,grain,sat,tint,blur});
   return true;};
+
+// ---------- permit (start of part 2) ----------
+const permitC=document.createElement('canvas');permitC.width=600;permitC.height=846;const pctx=permitC.getContext('2d');
+const permitT=new THREE.CanvasTexture(permitC);permitT.colorSpace=THREE.SRGBColorSpace;permitT.anisotropy=8;
+const PITEMS=['Analyse des risques réalisée','Consignation électrique et fluides','Mesures O₂ / LIE / H₂S / CO conformes','Ventilation mécanique en place','Harnais, trépied et treuil vérifiés','Surveillant désigné, présent en permanence','Moyens d\'alerte et de secours prêts'];
+const PBOX=i=>[46,318+i*50];
+let lastPermitKey='';
+function drawPermit(nChecks,sig){const key=nChecks+'|'+sig.toFixed(2);if(key===lastPermitKey)return;lastPermitKey=key;const g=pctx;
+  g.fillStyle='#f6f4ee';g.fillRect(0,0,600,846);
+  g.fillStyle='#1f3a5f';g.fillRect(0,0,600,96);g.fillStyle='#fff';g.font='bold 30px DejaVu Sans';g.fillText('PERMIS DE PÉNÉTRER',30,44);
+  g.font='18px DejaVu Sans';g.fillText('Espace confiné — N° 2026-147',30,76);
+  g.fillStyle='#222';g.font='17px DejaVu Sans';
+  const rows=[['Lieu','Cuve enterrée R-12 — Atelier B'],['Travaux','Remplacement joint de vanne DN150'],['Durée','13h45 → 15h30'],['Atmosphère','O₂ 20,9 %  LIE 0 %  H₂S 0  CO 0']];
+  rows.forEach(([a,b],i)=>{g.font='bold 17px DejaVu Sans';g.fillText(a+' :',30,138+i*36);g.font='17px DejaVu Sans';g.fillText(b,150,138+i*36);g.strokeStyle='#bbb';g.beginPath();g.moveTo(150,144+i*36);g.lineTo(570,144+i*36);g.stroke();});
+  g.font='bold 18px DejaVu Sans';g.fillStyle='#1f3a5f';g.fillText('VÉRIFICATIONS AVANT ENTRÉE',30,292);
+  PITEMS.forEach((it,i)=>{const [x,y]=PBOX(i);g.strokeStyle='#333';g.lineWidth=2;g.strokeRect(x-14,y-14,28,28);g.fillStyle='#222';g.font='17px DejaVu Sans';g.fillText(it,x+28,y+6);
+    if(i<nChecks){g.strokeStyle='#1a3fb0';g.lineWidth=4;g.beginPath();g.moveTo(x-10,y);g.lineTo(x-2,y+9);g.lineTo(x+14,y-14);g.stroke();}});
+  g.font='bold 15px DejaVu Sans';g.fillStyle='#444';['Émetteur','Intervenant','Surveillant'].forEach((n,i)=>{const x=30+i*190;g.fillText(n,x,708);g.strokeStyle='#999';g.lineWidth=1;g.strokeRect(x,716,170,80);
+    const p=clamp(sig*3-i);if(p>0){g.strokeStyle='#1a3fb0';g.lineWidth=2.5;g.beginPath();for(let j=0;j<=40*p;j++){const u=j/40;const px=x+18+u*130,py=760+Math.sin(u*14+i)*14*Math.sin(u*3.1)+(u-0.5)*10;j?g.lineTo(px,py):g.moveTo(px,py);}g.stroke();}});
+  permitT.needsUpdate=true;}
+const permitG=new THREE.Group();
+{const board=mesh(new THREE.BoxGeometry(0.245,0.345,0.008),new THREE.MeshStandardMaterial({color:0x6b4a2b,roughness:0.6}));board.position.z=-0.005;permitG.add(board);
+ const paper=mesh(new THREE.PlaneGeometry(0.22,0.31),new THREE.MeshStandardMaterial({map:permitT,roughness:0.95,color:0xb8b8b4}));paper.position.set(0,-0.008,0.0);permitG.add(paper);
+ const clip=mesh(new THREE.BoxGeometry(0.09,0.03,0.016),M.steel);clip.position.set(0,0.162,0.006);permitG.add(clip);
+ const gM=new THREE.MeshStandardMaterial({color:0x2c2f33,roughness:0.75});const lh=mesh(new THREE.CapsuleGeometry(0.022,0.06,4,8),gM);lh.position.set(-0.125,-0.15,0.012);lh.rotation.z=0.4;permitG.add(lh);
+}
+const penG=new THREE.Group();{const pen=cyl(0.005,0.004,0.14,new THREE.MeshStandardMaterial({color:0x1a3fb0,roughness:0.3}),8);pen.position.set(0.03,0.06,0.03);pen.rotation.z=-0.5;pen.rotation.x=0.4;penG.add(pen);
+ const rh=mesh(new THREE.CapsuleGeometry(0.018,0.045,4,8),new THREE.MeshStandardMaterial({color:0x2c2f33,roughness:0.75}));rh.position.set(0.08,0.105,0.05);rh.rotation.z=-0.9;penG.add(rh);
+}
+permitG.add(penG);
+const PC=V(2.3,1.12,1.25),PCAM=PC.clone().add(V(0.42,0.43,0.47).normalize().multiplyScalar(0.47));permitG.position.copy(PC);permitG.lookAt(PCAM);permitG.rotateX(-0.12);scene.add(permitG);
+function permitLocal(cx,cy){return V((cx/600-0.5)*0.22,(0.5-cy/846)*0.31-0.008,0.004);}
+window.renderPermit=function(t){common();setGood(true);permitG.visible=true;att.root.visible=true;att.root.position.set(1.45,0,-0.75);att.root.rotation.y=-2.0;
+  ent.root.visible=true;ent.root.position.set(0.85,0,0.95);ent.root.rotation.y=-0.8;ent.L.sh.rotation.set(0.1,0,0.08);ent.R.sh.rotation.set(0.1,0,-0.08);
+  const n=Math.max(0,Math.min(7,Math.floor((t-73.5)/0.6)+1));const sig=clamp((t-77.9)/1.5);drawPermit(t<73.5?0:n,sig);
+  // pen target
+  let tgt;if(t<77.9){const i=Math.min(6,Math.max(0,Math.floor((t-73.5)/0.6)));const ph=((t-73.5)/0.6)%1;const [bx,by]=PBOX(i);tgt=permitLocal(bx+ph*6,by-ph*8);tgt.z+=0.004+0.01*Math.max(0,Math.sin(ph*Math.PI*2));}
+  else{const i=Math.min(2,Math.floor(sig*3));const u=(sig*3)%1;tgt=permitLocal(48+i*190+u*130,760+Math.sin(u*14+i)*14);tgt.z+=0.004;}
+  penG.position.copy(tgt);
+  look(PCAM,PC.clone().add(V(0,-0.02,0)),t,0.006);APER=0.55;
+  let exposure=lerp(0.55,1.0,sm(72.6,73.6,t));
+  inter('2ᵉ PARTIE','Les bons réflexes','La même intervention, réalisée en sécurité','#3fae4f',sm(70.3,71,t)*(1-sm(72.5,73.1,t)));
+  setCap('AVANT DE COMMENCER · PERMIS','Permis de pénétrer : chaque point est vérifié et signé','Analyse des risques, consignation, mesures, ventilation, secours',sm(73.6,74.1,t)*(1-sm(79.2,79.7,t)));
+  finish(t,{fade:Math.max(1-sm(70,70.6,t),sm(79.5,80,t)),tc0:14*3600+30*60,exposure,grain:0.045,sat:0.88,tint:[1,1,1],blur:0});
+  return true;};
+// ---------- master timeline (152 s) ----------
+window.renderMaster=function(T){
+  if(T<70)return window.renderBad(T);
+  if(T<80)return window.renderPermit(T);
+  const t=T-74;common();resetPose(ent);resetPose(att);att.root.visible=true;att.root.position.set(1.45,0,-0.75);att.root.rotation.y=-2.0;
+  ent.L.sh.rotation.set(-2.6,0,0.15);ent.R.sh.rotation.set(-2.6,0,-0.15);
+  APER=(t>=17&&t<27)?0.9:(t>=35&&t<60)?0.35:0.55;
+  return window.renderAt(t);};
 
 window.ready=true;
 </script></body></html>

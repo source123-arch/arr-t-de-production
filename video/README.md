@@ -1,28 +1,30 @@
 # Espace confiné — vidéo de sensibilisation (maintenance industrielle)
 
-`espace-confine.mp4` — 1280×720, 25 i/s, ~2 min 06, sous-titres incrustés en français, bande-son d'ambiance.
+`espace-confine.mp4` — 1280×720, 25 i/s, 2 min 32, sous-titres incrustés en français, bande-son d'ambiance.
 
-Structure : **1ʳᵉ partie — les mauvais réflexes** (reconstitution d'un accident), puis **2ᵉ partie — les bons réflexes** (la même intervention réalisée en sécurité).
+Animation 3D de synthèse : personnages articulés, textures procédurales, éclairage dynamique, profondeur de champ et grain de film.
+Structure : **1ʳᵉ partie — les mauvais réflexes** (reconstitution d'un accident), puis **2ᵉ partie — les bons réflexes**.
 
 ## Déroulé
 
 | Temps | Séquence | Contenu |
 |---|---|---|
-| 0:00–0:05 | Titre | « Espace confiné — mauvais réflexes, bons réflexes » |
-| 0:05–0:08 | 1ʳᵉ partie | Les mauvais réflexes — reconstitution d'un accident |
-| 0:08–0:16 | ✗ Erreur | Intervention « rapide » : ni permis, ni balisage, ni consignation |
-| 0:16–0:23 | ✗ Erreur | Descente seul, sans harnais, sans détecteur, sans ventilation |
-| 0:23–0:33 | ✗ Danger invisible | Vue caméra-casque : atmosphère appauvrie en O₂, malaise, perte de connaissance |
-| 0:33–0:41 | ✗ Erreur fatale | Un collègue descend porter secours sans protection |
-| 0:41–0:51 | Bilan | 2 victimes — récapitulatif des erreurs |
-| 0:51–0:54 | 2ᵉ partie | Les bons réflexes |
-| 0:54–1:05 | Étape 1 · Préparation | Permis, consignation, balisage, trépied + treuil |
-| 1:05–1:15 | Étape 2 · Détection | Mesure 4 gaz (O₂, LIE, H₂S, CO) avant l'entrée |
-| 1:15–1:23 | Étape 3 · Ventilation | Ventilateur et gaine soufflant de l'air neuf au fond |
-| 1:23–1:33 | Étape 4 · Entrée | Descente encordée, harnais relié au treuil, surveillant dehors |
-| 1:33–1:48 | Étape 5 · Intervention | Détecteur porté en continu ; alarme O₂ < 19,5 % → évacuation |
-| 1:48–1:58 | Étape 6 · Évacuation | Le surveillant remonte l'intervenant au treuil, alerte les secours |
-| 1:58–2:06 | À retenir | Les 6 règles clés |
+| 0:00–0:08 | Titre · 1ʳᵉ partie | « Espace confiné — mauvais réflexes, bons réflexes » |
+| 0:08–0:17 | ✗ Erreur | Intervention « rapide » : ni permis, ni balisage, ni consignation |
+| 0:17–0:24 | ✗ « Ça ne sent rien » | Vue caméra-casque au-dessus du trou : l'odorat ne détecte pas le manque d'O₂ |
+| 0:24–0:31 | ✗ Erreur | Descente seul, sans harnais, sans détecteur, sans ventilation |
+| 0:31–0:43 | ✗ Danger invisible | Vue caméra-casque : atmosphère appauvrie, malaise, perte de connaissance |
+| 0:43–0:56 | ✗ Erreur fatale | Un collègue accourt, appelle sans réponse, descend sans protection |
+| 0:56–1:00 | ✗ | Vue du sauveteur : il s'effondre à son tour |
+| 1:00–1:10 | Bilan | 2 victimes — récapitulatif des erreurs |
+| 1:10–1:20 | 2ᵉ partie · Permis | Permis de pénétrer rempli case par case et signé |
+| 1:20–1:31 | Étape 1 · Préparation | Consignation, balisage, trépied + treuil |
+| 1:31–1:41 | Étape 2 · Détection | Mesure 4 gaz (O₂, LIE, H₂S, CO) avant l'entrée |
+| 1:41–1:49 | Étape 3 · Ventilation | Ventilateur et gaine soufflant de l'air neuf au fond |
+| 1:49–1:59 | Étape 4 · Entrée | Descente encordée, harnais relié au treuil, surveillant dehors |
+| 1:59–2:14 | Étape 5 · Intervention | Détecteur porté en continu ; alarme O₂ < 19,5 % → évacuation |
+| 2:14–2:24 | Étape 6 · Évacuation | Le surveillant remonte l'intervenant au treuil, alerte les secours |
+| 2:24–2:32 | À retenir | Les 6 règles clés |
 
 > Vidéo de sensibilisation : elle ne remplace ni la formation ni les procédures du site.
 
@@ -35,10 +37,8 @@ cd video/source
 npm install three@0.160.0
 python3 -m http.server 8765 &          # sert scene.html
 node render.js preview 10,22,50        # aperçus prev_<t>.jpg
-mkdir -p frames frames_bad
-node render.js bad 0 1350               # 1re partie (renderBad)
-node render.js frames 150 1950          # 2e partie (renderAt)
+mkdir -p frames_m && node render.js master 0 3800   # timeline complète (renderMaster)
 pip install numpy scipy
-python3 audio_bad.py && python3 audio.py
+python3 audio.py && python3 audio_master.py
 ./assemble.sh                          # -> ../espace-confine.mp4
 ```
